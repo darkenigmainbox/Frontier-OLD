@@ -211,7 +211,7 @@ function RenderKindChips() {
         (State.folder === 'all') || (State.folder === 'fav' && State.favs.has(i.id)) ||
         (State.folder === 'recent' && State.recents.includes(i.id)) ||
         (i.folder === State.folder || i.folder.startsWith(State.folder + '/'))))
-        counts.set(i.kind, (counts.get(i.kind) || 0) + 1);
+        counts.set(item.kind, (counts.get(item.kind) || 0) + 1);
     for (const kind of KINDS) {
         if (kind !== 'All' && !counts.has(kind)) continue;
         const chip = document.createElement('button');
@@ -405,7 +405,7 @@ function RenderInspector() {
         const tags = document.createElement('div');
         tags.className = 'tag-row';
         for (const tag of item.tags) {
-            const pill = document.createElement('button';
+            const pill = document.createElement('button');
             pill.type = 'button';
             pill.className = 'tag';
             pill.textContent = `#${tag}`;
@@ -492,6 +492,67 @@ function MoveSelection(delta) {
     idx = idx < 0 ? (delta > 0 ? 0 : items.length - 1) : (idx + delta + items.length) % items.length;
     Select(items[idx].id, false);
 }
+/* ------------------------------------------------------------------ notch */
+function SetSheetOpen(open) {
+    const sheet = $('browser-sheet');
+    const notch = $('notch');
+    sheet.classList.toggle('open', open);
+    sheet.style.height = '';
+    notch.setAttribute('aria-expanded', open ? 'true' : 'false');
+    $('notch-chevron').textContent = open ? '\u25BE' : '\u25B4';
+    $('status-text').textContent = open ? 'Ready' : 'Browser docked — press B or drag the notch';
+}
+function SheetOpen() {
+    return $('browser-sheet').classList.contains('open');
+}
+function InitNotch() {
+    const notch = $('notch');
+    const sheet = $('browser-sheet');
+    let suppressClick = false;
+    notch.addEventListener('click', () => {
+        if (suppressClick) { suppressClick = false; return; }
+        SetSheetOpen(!SheetOpen());
+    });
+    $('stage-browse-btn').addEventListener('click', () => {
+        SetSheetOpen(true);
+        $('global-search').focus();
+    });
+    // Drag travel with snap: upward past 25% (or a fast upward flick) opens.
+    let dragging = false, startY = 0, startH = 0, lastY = 0, lastT = 0, velocity = 0, moved = false;
+    const maxH = () => Math.round(window.innerHeight * 0.8);
+    notch.addEventListener('pointerdown', e => {
+        dragging = true; moved = false;
+        startY = e.clientY; lastY = e.clientY;
+        lastT = performance.now(); velocity = 0;
+        startH = SheetOpen() ? sheet.getBoundingClientRect().height : 0;
+        notch.setPointerCapture(e.pointerId);
+    });
+    notch.addEventListener('pointermove', e => {
+        if (!dragging) return;
+        const dy = startY - e.clientY;
+        if (Math.abs(dy) > 4) moved = true;
+        const now = performance.now();
+        velocity = (lastY - e.clientY) / Math.max(1, now - lastT);
+        lastY = e.clientY; lastT = now;
+        const h = Math.min(maxH(), Math.max(0, startH + dy));
+        sheet.style.transition = 'none';
+        sheet.style.height = `${h}px`;
+        sheet.classList.toggle('open', h > 8);
+    });
+    const endDrag = e => {
+        if (!dragging) return;
+        dragging = false;
+        sheet.style.transition = '';
+        if (!moved) return; // plain click: the click handler toggles.
+        suppressClick = true; // swallow the synthetic click after a drag.
+        e.preventDefault();
+        const h = sheet.getBoundingClientRect().height;
+        const flickOpen = velocity > 0.6, flickClosed = velocity < -0.6;
+        SetSheetOpen(flickOpen || (!flickClosed && h > maxH() * 0.25));
+    };
+    notch.addEventListener('pointerup', endDrag);
+    notch.addEventListener('pointercancel', () => { dragging = false; sheet.style.transition = ''; SetSheetOpen(SheetOpen()); });
+}
 function Init() {
     $('search-icon').innerHTML = ICONS.search;
     const search = $('global-search');
@@ -519,7 +580,10 @@ function Init() {
     document.addEventListener('keydown', e => {
         const typing = document.activeElement === search;
         if (e.key === '/' && !typing) { e.preventDefault(); search.focus(); search.select(); }
-        else if (e.key === 'Escape' && !typing) { State.selectedId = null; RenderItems(); RenderInspector(); RenderStatus(); }
+        else if (e.key === 'Escape' && !typing) {
+            if (SheetOpen()) SetSheetOpen(false);
+            else { State.selectedId = null; RenderItems(); RenderInspector(); RenderStatus(); }
+        }
         else if (typing) return;
         else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') { e.preventDefault(); MoveSelection(1); }
         else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') { e.preventDefault(); MoveSelection(-1); }
@@ -527,8 +591,12 @@ function Init() {
         else if ((e.key === 'f' || e.key === 'F') && State.selectedId) ToggleFav(State.selectedId);
         else if (e.key === 'g' || e.key === 'G') document.querySelector('#view-toggle [data-view="grid"]').click();
         else if (e.key === 'l' || e.key === 'L') document.querySelector('#view-toggle [data-view="list"]').click();
+        else if (e.key === 'b' || e.key === 'B') SetSheetOpen(!SheetOpen());
     });
+    InitNotch();
     SyncAll();
+    SetSheetOpen(true);
+    setTimeout(() => Toast('Drag the notch down (or press B) to dock the browser'), 600);
     const params = new URLSearchParams(location.search);
     if (params.get('select') && ById.get(params.get('select'))) Select(params.get('select'), false);
     console.log(`[asset-browser] ${ASSET_CATALOG.length} items across ${WORKSPACES.length} libraries`);

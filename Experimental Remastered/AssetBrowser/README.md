@@ -35,8 +35,12 @@ python3 "Experimental Remastered/AssetBrowser/Serve.py" 8086
 # → http://localhost:8086/Experimental%20Remastered/AssetBrowser/
 ```
 
+The browser lives in a bottom sheet behind a trapezoidal expansion notch
+(`PanelExpansionTab` language: 8% inset contour, caption, grip): click the
+notch to toggle, drag it to travel with flick snap, or use the stage button.
+
 Shortcuts: `/` search · `↑↓←→` move · `Enter` open in workspace ·
-`F` favorite · `G`/`L` grid/list · `Esc` clear.
+`F` favorite · `G`/`L` grid/list · `B` toggle sheet · `Esc` dock, then clear.
 
 All actions are illustrative toasts — nothing mutates state outside
 favorites/recents. The later C++ port will wire “Open in …” to the real

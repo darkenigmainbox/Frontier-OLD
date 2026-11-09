@@ -454,3 +454,99 @@ select:focus { border-color: rgba(232, 194, 122, 0.5); }
 .related-row .r-kind { font-size: 10px; color: var(--ink-faint); flex: 0 0 auto; }
 .insp-empty { color: var(--ink-faint); font-size: 12px; text-align: center; padding: 50px 16px; line-he
 ...[truncated 1543 chars]
+/* ---------- Stage (placeholder viewport) ---------- */
+.stage {
+  flex: 1 1 auto;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(90% 70% at 50% 0%, rgba(158, 207, 255, 0.05), transparent 60%),
+    repeating-linear-gradient(0deg, transparent 0 31px, rgba(255, 255, 255, 0.022) 31px 32px),
+    repeating-linear-gradient(90deg, transparent 0 31px, rgba(255, 255, 255, 0.022) 31px 32px),
+    #08090b;
+  border-bottom: 1px solid var(--line-soft);
+  position: relative;
+  overflow: hidden;
+}
+.stage-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  flex: 0 0 auto;
+}
+.stage-title { color: var(--ink-faint); font-size: 11.5px; margin-left: 4px; }
+.stage-center {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+  padding-bottom: 18px;
+}
+.stage-center h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: #2c2c30;
+}
+.stage-center p { margin: 0; color: var(--ink-faint); font-size: 12px; line-height: 1.6; }
+.stage-center .button { margin-top: 6px; }
+.stage-hint { display: flex; align-items: center; gap: 6px; }
+
+/* ---------- Trapezoidal expansion notch ---------- */
+.notch {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 236px;
+  height: 30px;
+  margin-bottom: -1px;
+  border: 0;
+  padding: 0 0 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  background: #1c1c1f;
+  color: var(--ink-dim);
+  /* 8% trapezoid inset, wide edge down — the PanelExpansionTab contour. */
+  clip-path: polygon(8% 0, 92% 0, 100% 100%, 0% 100%);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  z-index: 5;
+}
+.notch:hover { background: #232326; color: var(--ink); }
+.notch:active { cursor: grabbing; }
+.notch-grip { width: 34px; height: 3px; border-radius: 2px; background: #4a4a50; flex: 0 0 auto; }
+.notch-caption {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  font-variant-numeric: tabular-nums;
+}
+.notch-chevron { font-size: 11px; color: var(--cream); transition: transform 0.18s ease; }
+.notch[aria-expanded="false"] .notch-chevron { transform: rotate(180deg); }
+
+/* ---------- Bottom browser sheet ---------- */
+.browser-sheet {
+  flex: 0 0 auto;
+  height: 64vh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+  overflow: hidden;
+  transition: height 0.22s ease;
+}
+.browser-sheet:not(.open) { height: 0; border-top-color: transparent; }
+.browser-sheet .workspace { padding-top: 8px; }
+@media (max-height: 700px) {
+  .browser-sheet.open { height: 78vh; }
+}
