@@ -76,7 +76,7 @@ Frontier/Engine/
 ├── DeviceExchange/VulkanDeviceAccess.h       the editor's Vulkan device as the exchanges attach to it
 ├── Rendering/
 │   ├── GlobalIllumination/                   the 1:1 port (namespace Frontier::GlobalIllumination)
-│   │     IlluminationHost, SceneStructure, BoundingStructure, OccupantDistanceSpace, SceneDistanceSpace,
+│   │     IlluminationHost, SceneStructure, BoundingStructure, SubjectDistanceSpace, SceneDistanceSpace,
 │   │     SurfaceCardDepot, RayTracingSpace, AtmosphereIntegrator, ShadowProjection, SurfaceProjection,
 │   │     ResamplingSequence, DisplayProjection, RefreshEncoding, EnvironmentEncoding, LuminaireRegister,
 │   │     PickProjection (GPU picking, beyond the demo), …
@@ -476,7 +476,7 @@ never an overestimate otherwise, so a march never steps through a stretched copy
 
 **How edits reach the renderer.** `Projects/Everest/Source/EverestSceneGeometry` binds each record to its occupants (or
 to an engine shape) and evaluates its transform and modifier stack (`Scene/GeometryLayout`) into occupant placements.
-`Rendering/GlobalIllumination/OccupantRelocation` (beyond the demo) applies them between refreshes:
+`Rendering/GlobalIllumination/SubjectRelocation` (beyond the demo) applies them between refreshes:
 
 - the occupant profiles are rewritten, and a moved occupant carries its motion for one refresh (motion vectors);
 - a reserve occupant takes its template's shape, cards and profile first;
@@ -588,7 +588,7 @@ now asks the GPU which object is drawn under the pointer.
   space is stretched about the clicked pixel, so each texel is one screen pixel around it and keeps the nearest
   occupant. The pick reads the image's own vertex stream and occupant profiles, so it works with the cluster,
   virtualized-geometry and analytic paths alike: one submission and a 324-byte readback per click.
-- **The record:** `SceneGeometryOccupancy::QueryOwner` maps the occupant to the Geometry record that shows it (every
+- **The record:** `SceneSubjectPlacement::QueryOwner` maps the occupant to the Geometry record that shows it (every
   part and copy, the reserve's included; the ground is the Proving ground's). The clicked pixel's record wins. Where
   the pixel shows the sky or nothing a record owns, the nearest record within 4 pixels is taken, so thin poles stay
   easy to hit.
@@ -629,7 +629,7 @@ in double precision:
   - `Images/GizmoSpaceFrontier.jpg` shows the Control tower selected, with `Images/GizmoSpaceFrontierDetail.jpg` at 3×.
 - **Bridge:** the bridge from the level to this renderer is `Frontier/Extensions/Rendering/RenderingExtension`
   (formerly `EverestSceneViewport`).
-  - `SceneGeometryOccupancy` was formerly `EverestSceneGeometry`.
+  - `SceneSubjectPlacement` was formerly `EverestSceneGeometry`.
   - The viewport contract is `Frontier/Engine/Interface/SceneViewportPresentation.h`.
 - **Simulate:** the viewport bar's Play button (Alt+S) runs the level's PhysicsSpace; see `Exhibits/Physics/README.md`.
 - **Capture:** `SceneViewportWorkspaceCapture … 3 "Geometry:Control tower"` selects a record by name.
