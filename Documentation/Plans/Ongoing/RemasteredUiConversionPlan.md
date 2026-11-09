@@ -135,6 +135,18 @@ Rules for NOOP shells:
   ctest; 4 evidence PNGs (overview/lux/gallery/lunar). Log is newest-first:
   latest is front(), not back().
 
+- [x] **U6. UV Studio Workspace:** UVEditor import (c7egoist/arena/36d6f048, 21 files)
+  + C++ shell conversion — asset tab bar, island outliner with importance
+  buckets, UDIM chips, mode/tool/pivot/snap/lens/shade HUD, split 2D atlas
+  (pinned per-island UV bounds, sibling-tile minis) + 3D mesh decor, Blender
+  operator dock, log drawer, status bar, hotkey sheet, 4-tab inspector
+  (Packing + allocator + engine / Unwrap + relax + edges + pins + align /
+  UDIM matrix + tile props / Diagnostics + repair). Node-pinned catalogue:
+  4 assets, 85 islands, exact 70/10/20 + 65/18/17 + 72/12/16 + per-UDIM 100%
+  shares, 0 overlaps / 0 flipped. NOOP audit: unwrap/pack/relax/scale/pin/
+  seam/stitch/weld/split/align/texel/UDIM/import/export/undo. 14 validation
+  groups green + ctest; 4 evidence PNGs (overview/texel/udim/diagnostics).
+
 Per-shell exit criteria: 1:1 checklist vs the Remastered screenshot + HTML/CSS
 tokens; CPU-raster evidence PNGs; headless interaction checks; NOOP audit list.
 No engine calls, no shaders.

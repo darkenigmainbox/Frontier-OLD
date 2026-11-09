@@ -284,7 +284,10 @@ add_library(FrontierSceneEditorUI STATIC
     Frontier/Engine/Interface/Workspaces/FractureWorkspace.cpp
     Frontier/Engine/Interface/Workspaces/PhotometricWorkspaceCatalogue.cpp
     Frontier/Engine/Interface/Workspaces/PhotometricWorkspaceInspector.cpp
-    Frontier/Engine/Interface/Workspaces/PhotometricWorkspace.cpp)
+    Frontier/Engine/Interface/Workspaces/PhotometricWorkspace.cpp
+    Frontier/Engine/Interface/Workspaces/UvWorkspaceCatalogue.cpp
+    Frontier/Engine/Interface/Workspaces/UvWorkspaceInspector.cpp
+    Frontier/Engine/Interface/Workspaces/UvWorkspace.cpp)
 target_include_directories(FrontierSceneEditorUI PUBLIC
     "${CMAKE_SOURCE_DIR}"
     "${CMAKE_SOURCE_DIR}/Frontier")
@@ -905,6 +908,7 @@ include(Automation/ParticleWorkspace.cmake)
 include(Automation/FluidWorkspace.cmake)
 include(Automation/FractureWorkspace.cmake)
 include(Automation/PhotometricWorkspace.cmake)
+include(Automation/UvWorkspace.cmake)
 include(Automation/VirtualizedGeometryRendering.cmake)
 include(Automation/DirectShadingRendering.cmake)
 include(Automation/ParticleSimulationRendering.cmake)
