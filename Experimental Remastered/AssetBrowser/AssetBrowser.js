@@ -66,6 +66,15 @@ function GlyphFor(name) {
 
 /* ------------------------------------------------------------------ state */
 const WORKSPACES = ['Particle Lab', 'Photometric', 'Fracture Lab', 'Fluid Studio', 'Force Fields', 'UV Studio'];
+/* Workspace -> HTML editor page (relative to AssetBrowser/). null = no HTML prototype yet. */
+const WORKSPACE_PAGES = {
+    'Particle Lab': '../ParticleEditor/',
+    'Photometric': '../PhotometricEditor/',
+    'Fracture Lab': '../FractureEditor/',
+    'Fluid Studio': null,
+    'Force Fields': '../ForceFieldEditor/',
+    'UV Studio': '../UVEditor/',
+};
 const State = {
     folder: 'all',          // 'all' | 'fav' | 'recent' | folder path
     query: '',
@@ -352,8 +361,12 @@ function OpenInWorkspace(id) {
     PushRecent(id);
     Select(id, false);
     RenderTree();
-    Toast(`Prototype: “${item.name}” would open in ${item.ws}`);
-    $('status-text').textContent = `Opened ${item.name} in ${item.ws} (illustrative)`;
+    const page = WORKSPACE_PAGES[item.ws];
+    if (!page) {
+        Toast(`No HTML prototype for ${item.ws} yet — staying in the browser`);
+        return;
+    }
+    location.href = `${page}?asset=${encodeURIComponent(item.id)}`;
 }
 
 /* ------------------------------------------------------------------ inspector */
@@ -425,6 +438,10 @@ function RenderInspector() {
     open.type = 'button';
     open.className = 'button primary';
     open.textContent = `Open in ${item.ws}`;
+    if (!WORKSPACE_PAGES[item.ws]) {
+        open.disabled = true;
+        open.title = `No HTML prototype for ${item.ws} yet`;
+    }
     open.addEventListener('click', () => OpenInWorkspace(item.id));
     const row = document.createElement('div');
     row.className = 'row';
@@ -594,6 +611,9 @@ function Init() {
         else if (e.key === 'b' || e.key === 'B') SetSheetOpen(!SheetOpen());
     });
     InitNotch();
+    const boot = new URLSearchParams(location.search);
+    if (WORKSPACES.includes(boot.get('ws'))) State.folder = boot.get('ws');
+    if (KINDS.includes(boot.get('kind'))) State.kind = boot.get('kind');
     SyncAll();
     SetSheetOpen(true);
     setTimeout(() => Toast('Drag the notch down (or press B) to dock the browser'), 600);

@@ -39,6 +39,12 @@ The browser lives in a bottom sheet behind a trapezoidal expansion notch
 (`PanelExpansionTab` language: 8% inset contour, caption, grip): click the
 notch to toggle, drag it to travel with flick snap, or use the stage button.
 
+Deep links (both directions): editors route asset picking here via
+`../AssetBrowser/?ws=<Workspace>[&kind=<Kind>]`; the inspector's
+`Open in <workspace>` button returns via `<Editor>/?asset=<id>`, which each
+editor handles in `HandleAssetDeepLink` (spawn / select / apply + log).
+Fluid Studio has no HTML editor yet, so its Open button stays disabled.
+
 Shortcuts: `/` search · `↑↓←→` move · `Enter` open in workspace ·
 `F` favorite · `G`/`L` grid/list · `B` toggle sheet · `Esc` dock, then clear.
 

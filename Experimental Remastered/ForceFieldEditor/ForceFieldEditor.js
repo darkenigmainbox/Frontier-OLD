@@ -1031,45 +1031,18 @@ function ConstructSourcePage(Page, Source)
 
 function OpenLibrary()
 {
-    const Veil = document.getElementById('LibraryVeil');
-    const Sheet = document.getElementById('LibrarySheet');
-    if (!Veil || !Sheet) return;
-    Sheet.textContent = '';
+    // The 17-type library moved out to the shared Asset Browser.
+    location.href = '../AssetBrowser/?ws=Force%20Fields';
+}
 
-    const Close = C.Construct('button', 'round-btn', C.ConstructGlyph('Close'));
-    Close.type = 'button';
-    Close.addEventListener('click', CloseLibrary);
-    Sheet.append(C.Construct('div', 'library-head', [C.Construct('h3', null, 'Place Forcefield or Wind Generator'), Close]));
-
-    const Scroll = C.Construct('div', 'library-scroll');
-    for (const Contrib of ['Flow', 'Accelerate', 'Damp'])
-    {
-        const Info = F.Contributions[Contrib];
-        Scroll.append(C.Construct('div', 'sub-heading', `${Info.Label} · ${Info.Unit} (Finite Spatial Influence)`));
-        const Grid = C.Construct('div', 'library-grid');
-        for (const Type of F.Types.filter((T) => T.Contribution === Contrib))
-        {
-            const GlowCol = F.ResolveSourceColour(Type.Id);
-            const Swatch = C.Construct('span', 'library-swatch', C.ConstructGlyph(Type.Glyph));
-            Swatch.style.color = GlowCol;
-            Swatch.style.background = GlowCol + '20';
-            const Card = C.Construct('button', 'library-card', [
-                C.Construct('div', 'library-card-top', [
-                    Swatch,
-                    C.Construct('span', 'library-card-title', Type.Name),
-                    C.Construct('span', 'library-card-meta', `${Type.Reach} · ${FormatDistance(Type.Defaults.Radius || 180)}`)
-                ]),
-                C.Construct('div', 'library-card-blurb', Type.Blurb)
-            ]);
-            Card.type = 'button';
-            Card.style?.setProperty?.('--card-glow', GlowCol);
-            Card.addEventListener('click', () => StartPlacement(Type.Id));
-            Grid.append(Card);
-        }
-        Scroll.append(Grid);
-    }
-    Sheet.append(Scroll);
-    Veil.hidden = false;
+/* Asset Browser deep link: ?asset=forcefield/<TypeId> arms placement for that type. */
+function HandleAssetDeepLink()
+{
+    const Raw = new URLSearchParams(location.search).get('asset') || '';
+    const M = Raw.match(/^forcefield\/([A-Za-z]+)$/);
+    if (!M) return;
+    if (F.TypeById[M[1]]) StartPlacement(M[1]);
+    else AppendLog('PLACE', `Asset \u201C${Raw}\u201D is not a forcefield type`, null, 'Place');
 }
 
 function CloseLibrary()
@@ -1229,4 +1202,5 @@ SetupEvents();
 SyncTopUi();
 C.Register(Persist);
 AppendLog('STUDIO', 'Force Field + Wind Studio ready', `${Scene.Sources.length} bounded fields loaded`, 'Boot');
+HandleAssetDeepLink();
 requestAnimationFrame(Tick);

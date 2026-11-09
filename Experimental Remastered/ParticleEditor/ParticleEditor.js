@@ -877,132 +877,42 @@ const FibreSummary = Effect => FormatInteger(Effect.P.fibre?.strands || 0);
 
 function ConstructQuickLibrary()
 {
+    // Preset browsing moved out to the shared Asset Browser.
     const FilterHost = document.getElementById('quick-preset-filters');
     const ListHost = document.getElementById('quick-presets-list');
-    const QuickCats = ['All', 'VFX', 'Transitions', 'Light fibres', 'Wind-blown', 'Physics', 'Ambient'];
-    FilterHost.textContent = '';
-    for (const Cat of QuickCats)
-    {
-        const Btn = C.Construct('button', QuickLibraryGroup === Cat ? 'active' : '', Cat);
-        Btn.type = 'button';
-        Btn.addEventListener('click', () => { QuickLibraryGroup = Cat; ConstructQuickLibrary(); });
-        FilterHost.append(Btn);
-    }
-
+    FilterHost.style.display = 'none';
+    const Search = document.getElementById('quick-preset-search');
+    if (Search && Search.closest('label')) Search.closest('label').style.display = 'none';
+    document.getElementById('quick-preset-count').textContent = String(PE.Presets.length);
     ListHost.textContent = '';
-    const Shown = PE.Presets.filter(P =>
-        (QuickLibraryGroup === 'All' || P.group === QuickLibraryGroup)
-        && (!QuickLibraryQuery || `${P.name} ${P.group} ${P.blurb}`.toLowerCase().includes(QuickLibraryQuery))
-    );
-    document.getElementById('quick-preset-count').textContent = String(Shown.length);
-
-    for (const Preset of Shown)
-    {
-        const Col = DisplayColour(Preset.p.colA);
-        const InScene = Scene.Effects.some(E => E.PresetId === Preset.id);
-        const Swatch = C.Construct('span', 'preset-swatch', C.ConstructGlyph(GroupGlyphs[Preset.group] || 'Sparkles'));
-        Swatch.style.color = Col;
-        const Btn = C.Construct('button', 'preset-card', [
-            Swatch,
-            C.Construct('span', 'preset-copy', [C.Construct('strong', null, Preset.name), C.Construct('small', null, Preset.blurb)]),
-            InScene ? C.Construct('span', 'preset-badge-in', 'IN') : C.Construct('span', 'preset-arrow', '↗')
-        ]);
-        Btn.type = 'button';
-        Btn.title = `Add ${Preset.name} (${Preset.group})`;
-        Btn.addEventListener('click', () => AddEffect(Preset.id));
-        ListHost.append(Btn);
-    }
+    const Btn = C.Construct('button', 'preset-card', [
+        C.Construct('span', 'preset-swatch', C.ConstructGlyph('Sparkles')),
+        C.Construct('span', 'preset-copy', [
+            C.Construct('strong', null, 'Browse particle assets\u2026'),
+            C.Construct('small', null, `${PE.Presets.length} presets \u00B7 shared Asset Browser`)
+        ]),
+        C.Construct('span', 'preset-arrow', '\u2197')
+    ]);
+    Btn.type = 'button';
+    Btn.addEventListener('click', () => { location.href = '../AssetBrowser/?ws=Particle%20Lab'; });
+    ListHost.append(Btn);
 }
 
 function OpenFullLibrary()
 {
-    const Veil = document.getElementById('LibraryVeil');
-    const Sheet = document.getElementById('LibrarySheet');
-    const Groups = [...new Set(PE.Presets.map(P => P.group))];
-
-    const Paint = () =>
-    {
-        Sheet.textContent = '';
-        const Close = C.Construct('button', 'icon-button', C.ConstructGlyph('Close'));
-        Close.type = 'button';
-        Close.addEventListener('click', () => { Veil.classList.remove('shown'); SyncTopNav(); });
-
-        const Search = C.Construct('input');
-        Search.placeholder = 'Search all 52 presets…';
-        Search.value = ModalQuery;
-        Search.addEventListener('input', () => { ModalQuery = Search.value.trim().toLowerCase(); PaintGrid(); });
-
-        Sheet.append(C.Construct('div', 'library-head', [
-            C.Construct('div', null, [
-                C.Construct('h2', null, 'Particle Library'),
-                C.Construct('div', 'outliner-subtitle', `${PE.Presets.length} presets in ${Groups.length} groups · eos GPU particle engine`)
-            ]),
-            C.Construct('label', 'search library-search', [C.ConstructGlyph('Search'), Search]),
-            Close
-        ]));
-
-        const Tabs = C.Construct('div', 'library-tabs');
-        for (const Group of ['All', ...Groups])
-        {
-            const Count = Group === 'All' ? PE.Presets.length : PE.Presets.filter(P => P.group === Group).length;
-            const Tab = C.Construct('button', 'library-tab' + (ModalGroup === Group ? ' active' : ''), [
-                C.Construct('span', null, Group),
-                C.Construct('small', null, String(Count))
-            ]);
-            Tab.type = 'button';
-            Tab.addEventListener('click', () => { ModalGroup = Group; Paint(); });
-            Tabs.append(Tab);
-        }
-        Sheet.append(Tabs);
-
-        const Grid = C.Construct('div', 'library-grid');
-        Sheet.append(Grid);
-
-        const PaintGrid = () =>
-        {
-            Grid.textContent = '';
-            const List = PE.Presets.filter(P =>
-                (ModalGroup === 'All' || P.group === ModalGroup)
-                && (!ModalQuery || `${P.name} ${P.blurb} ${P.group}`.toLowerCase().includes(ModalQuery))
-            );
-            for (const Preset of List)
-            {
-                const ColA = DisplayColour(Preset.p.colA), ColB = DisplayColour(Preset.p.colB);
-                const Glyph = C.Construct('div', 'card-glyph', C.ConstructGlyph(GroupGlyphs[Preset.group] || 'Sparkles'));
-                Glyph.style.color = ColA;
-                Glyph.style.background = ColA + '22';
-                const Swatch = C.Construct('div', 'card-swatch');
-                Swatch.style.background = `linear-gradient(90deg, ${ColA}, ${ColB})`;
-                const InCount = Scene.Effects.filter(E => E.PresetId === Preset.id).length;
-
-                const Card = C.Construct('button', 'library-card', [
-                    InCount ? C.Construct('span', 'card-badge', `${InCount} in scene`) : null,
-                    C.Construct('div', 'card-top', [
-                        Glyph,
-                        C.Construct('div', null, [
-                            C.Construct('div', 'card-name', Preset.name),
-                            C.Construct('div', 'card-native', `${Preset.group.toUpperCase()} · ${(CategoryLabels[Preset.p.kind] || 'Particles').toUpperCase()}`)
-                        ])
-                    ]),
-                    C.Construct('div', 'card-blurb', Preset.blurb),
-                    Swatch
-                ]);
-                Card.type = 'button';
-                Card.addEventListener('click', () => { AddEffect(Preset.id); Veil.classList.remove('shown'); SyncTopNav(); });
-                Grid.append(Card);
-            }
-        };
-        PaintGrid();
-    };
-    Paint();
-    Veil.classList.add('shown');
-    SyncTopNav();
-    Veil.onclick = Ev => { if (Ev.target === Veil) { Veil.classList.remove('shown'); SyncTopNav(); } };
+    // The 52-preset modal moved out to the shared Asset Browser.
+    location.href = '../AssetBrowser/?ws=Particle%20Lab';
 }
 
-//------------------------------------------------------------------------------------------------------------------------
-//                                  SUN + FLUID HYBRID INSPECTOR PAGES
-//------------------------------------------------------------------------------------------------------------------------
+/* Asset Browser deep link: ?asset=particle/<preset-id> adds the effect to the scene. */
+function HandleAssetDeepLink()
+{
+    const Raw = new URLSearchParams(location.search).get('asset') || '';
+    const M = Raw.match(/^particle\/([A-Za-z0-9-]+)$/);
+    if (!M) return;
+    if (PE.presetById(M[1])) AddEffect(M[1]);
+    else AppendLog('PARTICLES', `Asset \u201C${Raw}\u201D is not a particle preset`, null, 'warn');
+}
 
 const BindEffect = (Effect, Target, Key, Extra = {}) => ({
     Read: () => Target[Key],
@@ -2208,12 +2118,13 @@ async function Boot()
         else if (Ev.key === 'r' || Ev.key === 'R') ResetAll();
         else if (Ev.key === 's' || Ev.key === 'S') { document.getElementById('step-button').click(); }
         else if (Ev.key === 'v' || Ev.key === 'V') { document.getElementById('toggle-overlay-btn').click(); }
-        else if (Ev.key === '/') { Ev.preventDefault(); document.getElementById('quick-preset-search').focus(); }
+        else if (Ev.key === '/') { Ev.preventDefault(); location.href = '../AssetBrowser/?ws=Particle%20Lab'; }
         else if (Ev.key === 'Escape') { document.getElementById('LibraryVeil').classList.remove('shown'); SyncTopNav(); }
     });
 
     AppendLog('PARTICLES', `Engine ready · ${Scene.AdapterName}`, `${Scene.Effects.length} effects · ${PE.Presets.length} presets`, 'live');
     AppendLog('FORCES', 'Field visualization active', `${Scene.Forces.length} forces loaded`, 'live');
+    HandleAssetDeepLink();
 
     C.Broadcast();
     window.ParticleEditorScene = Scene;

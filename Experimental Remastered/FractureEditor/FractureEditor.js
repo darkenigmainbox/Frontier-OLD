@@ -365,37 +365,58 @@ function ConstructDockTabs()
 
 function ConstructQuickLibrary()
 {
+    // Solid/solver/material browsing moved out to the shared Asset Browser.
     const FilterHost = document.getElementById('quick-preset-filters');
     const ListHost = document.getElementById('quick-presets-list');
-    const Groups = ['All', 'Engineering', 'Brittle', 'Stone & Timber', 'Voronoi', 'Ductile'];
-    FilterHost.textContent = '';
-    for (const G of Groups)
-    {
-        const Btn = C.Construct('button', Studio.PresetGroup === G ? 'active' : '', G);
-        Btn.type = 'button';
-        Btn.addEventListener('click', () => { Studio.PresetGroup = G; ConstructQuickLibrary(); });
-        FilterHost.append(Btn);
-    }
+    FilterHost.style.display = 'none';
+    const Search = document.getElementById('quick-preset-search');
+    if (Search && Search.closest('label')) Search.closest('label').style.display = 'none';
+    document.getElementById('quick-preset-count').textContent = '27';
     ListHost.textContent = '';
-    const Filtered = SolidSpawnPresets.filter(P =>
-        (Studio.PresetGroup === 'All' || P.Group === Studio.PresetGroup)
-        && (!Studio.PresetQuery || `${P.Title} ${P.Mat} ${P.Blurb}`.toLowerCase().includes(Studio.PresetQuery))
-    );
-    document.getElementById('quick-preset-count').textContent = String(Filtered.length);
+    const Btn = C.Construct('button', 'preset-card', [
+        C.Construct('span', 'preset-swatch', C.ConstructGlyph('Boxes')),
+        C.Construct('span', 'preset-copy', [
+            C.Construct('strong', null, 'Browse fracture assets\u2026'),
+            C.Construct('small', null, 'Materials \u00B7 solvers \u00B7 presets \u00B7 constructs')
+        ]),
+        C.Construct('span', 'preset-arrow', '\u2197')
+    ]);
+    Btn.type = 'button';
+    Btn.addEventListener('click', () => { location.href = '../AssetBrowser/?ws=Fracture%20Lab'; });
+    ListHost.append(Btn);
+}
 
-    for (const P of Filtered)
+/* Asset Browser deep link: ?asset=fracture[-mat|-solver]/<id> spawns/selects/applies it. */
+function HandleAssetDeepLink()
+{
+    const Raw = new URLSearchParams(location.search).get('asset') || '';
+    if (!Raw.startsWith('fracture')) return;
+    const Refresh = Msg => { RecomputePartition(false, Msg); ConstructOutliner(); ConstructInspectorPage(); SyncViewportSelectors(); };
+    let M;
+    if ((M = Raw.match(/^fracture-mat\/([a-z_]+)$/)) && MaterialCatalogue[M[1]])
     {
-        const Mat = MaterialCatalogue[P.Mat] || MaterialCatalogue.concrete;
-        const Swatch = C.Construct('span', 'preset-swatch', C.ConstructGlyph('Fracture'));
-        Swatch.style.color = Mat.ExteriorHex;
-        const Btn = C.Construct('button', 'preset-card', [
-            Swatch,
-            C.Construct('span', 'preset-copy', [C.Construct('strong', null, P.Title), C.Construct('small', null, P.Blurb)]),
-            C.Construct('span', 'preset-arrow', '+ ↗')
-        ]);
-        Btn.type = 'button';
-        Btn.addEventListener('click', () => SpawnConstructPreset(P.Cat, P.Mat, P.Title, P.Solver));
-        ListHost.append(Btn);
+        const Cst = ActiveConstruct();
+        Cst.Spec.Material = M[1];
+        Refresh(`Material: ${MaterialCatalogue[M[1]].Label}`);
+        AppendLog('FRACTURE', `Material \u201C${MaterialCatalogue[M[1]].Label}\u201D applied from the Asset Browser`, Cst.Title, 'live');
+    }
+    else if ((M = Raw.match(/^fracture-solver\/([a-z_]+)$/)) && SolverCatalogue.some(S => S.Id === M[1]))
+    {
+        const Cst = ActiveConstruct();
+        Cst.Spec.Solver = M[1];
+        Refresh(`Algorithm: ${M[1]}`);
+        AppendLog('FRACTURE', `Solver \u201C${M[1]}\u201D applied from the Asset Browser`, Cst.Title, 'live');
+    }
+    else if ((M = Raw.match(/^fracture\/(construct-[a-z-]+)$/)) && Studio.Constructs.some(X => X.Id === M[1]))
+    {
+        SelectDirectoryItem(M[1]);
+        AppendLog('FRACTURE', `Construct \u201C${ActiveConstruct().Title}\u201D opened from the Asset Browser`, null, 'live');
+    }
+    else if ((M = Raw.match(/^fracture\/([a-z_]+)-([a-z]+)$/)))
+    {
+        const P = SolidSpawnPresets.find(X => X.Cat === M[1] && X.Mat === M[2]);
+        if (P) SpawnConstructPreset(P.Cat, P.Mat, P.Title, P.Solver);
+        else AppendLog('FRACTURE', `Asset \u201C${Raw}\u201D not found in the spawn catalogue`, null, 'warn');
     }
 }
 
@@ -1465,10 +1486,11 @@ function Boot()
         else if (Ev.key === 'r' || Ev.key === 'R') document.getElementById('reset-button').click();
         else if (Ev.key === 's' || Ev.key === 'S') document.getElementById('step-button').click();
         else if (Ev.key === 'm' || Ev.key === 'M') OpenSolverMatrix();
-        else if (Ev.key === '/') { Ev.preventDefault(); document.getElementById('quick-preset-search').focus(); }
+        else if (Ev.key === '/') { Ev.preventDefault(); location.href = '../AssetBrowser/?ws=Fracture%20Lab'; }
         else if (Ev.key === 'Escape') { document.getElementById('SolverVeil').classList.remove('shown'); SyncTopNav(); }
     });
 
+    HandleAssetDeepLink();
     AppendLog('FRACTURE', 'Fracture Studio initialized', `${Studio.Constructs.length} solids · 6 solvers active`, 'live');
     AppendLog('SDF', 'Engineering Navier–Cauchy + Fast Boussinesq Flat-BSP ready', null, 'live');
     C.Broadcast();

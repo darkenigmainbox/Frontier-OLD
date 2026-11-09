@@ -1240,39 +1240,50 @@ function RenderEnvironmentInspector(Node)
 
 function OpenIesMatrixModal()
 {
-    Dom.IesMatrixVeil.hidden = false;
-    Dom.MatrixGrid.replaceChildren();
-    const AllEntries = [
-        ...MeasuredIesProfileNames.map(Name => ({ Title: `${Name}.ies`, Tag: 'LM-63 Measured', Props: { useMeasuredIes: true, measuredProfile: Name, lumens: 1650, cone: 58, cutoff: 0, color: '#fff2cf', temperature: 4300 } })),
-        ...PresetIesNames.map(Name => ({ Title: Name, Tag: 'Project Zero', Props: { useMeasuredIes: false, profile: Name, lumens: 1650, cone: 58, cutoff: 0, color: '#fff2cf', temperature: 4300 } }))
-    ];
+    // The IES profile matrix moved out to the shared Asset Browser.
+    location.href = '../AssetBrowser/?ws=Photometric&kind=IES%20Profile';
+}
 
-    for (const Entry of AllEntries) {
-        const Tile = document.createElement('div');
-        Tile.className = 'matrix-tile';
-        Tile.innerHTML = `<div class="matrix-tile-title"><strong>${Entry.Title}</strong><span style="opacity:.55;font-size:10.5px">${Entry.Tag}</span></div>`;
-        const Canvas = document.createElement('canvas');
-        Tile.appendChild(Canvas);
-        Tile.addEventListener('click', () => {
-            const Ent = GetSelectedEntity();
-            let Target = Ent.Kind === 'light' && Ent.Light.Type === 'ieslight'
-                ? Ent.Light
-                : State.Lights.find(L => L.Type === 'ieslight');
-            if (!Target) {
-                Target = AddLightOfType('ieslight');
-            }
-            Target.Props.useMeasuredIes = Entry.Props.useMeasuredIes;
-            Target.Props.customIesKey = null;
-            if (Entry.Props.measuredProfile) Target.Props.measuredProfile = Entry.Props.measuredProfile;
-            if (Entry.Props.profile) Target.Props.profile = Entry.Props.profile;
-            State.SelectedId = Target.Id;
-            Dom.IesMatrixVeil.hidden = true;
-            PushLog('IES', `Assigned photometric curve "${Entry.Title}" to ${Target.Name}.`);
-            RefreshAll();
-        });
-        Dom.MatrixGrid.appendChild(Tile);
-        requestAnimationFrame(() => DrawIesPolarWebCanvas(Canvas, Entry.Props, State.LoadedIes));
+/* Asset Browser deep link: ?asset=photo-<group>/<name> activates it on the stage. */
+function ApplyIesDeepLink(Measured, Name)
+{
+    const Ent = GetSelectedEntity();
+    let Target = Ent.Kind === 'light' && Ent.Light.Type === 'ieslight'
+        ? Ent.Light
+        : State.Lights.find(L => L.Type === 'ieslight');
+    if (!Target) Target = AddLightOfType('ieslight');
+    Target.Props.useMeasuredIes = Measured;
+    Target.Props.customIesKey = null;
+    if (Measured) Target.Props.measuredProfile = Name;
+    else { Target.Props.profile = Name; Target.Props.measuredProfile = PresetToMeasuredMap[Name] || 'LowBeam'; }
+    State.SelectedId = Target.Id;
+    PushLog('IES', `Assigned photometric curve \u201C${Name}\u201D from the Asset Browser to ${Target.Name}.`);
+    RefreshAll();
+}
+function HandleAssetDeepLink()
+{
+    const Raw = new URLSearchParams(location.search).get('asset') || '';
+    if (!Raw.startsWith('photo-')) return;
+    let M;
+    if ((M = Raw.match(/^photo-rig\/([a-z]+)$/)) && ['roadway', 'gallery', 'studio', 'lunar'].includes(M[1]))
+        ApplyScenario(M[1]);
+    else if ((M = Raw.match(/^photo-light\/([a-z]+)$/)) && LightCatalogue[M[1]])
+        AddLightOfType(M[1]);
+    else if ((M = Raw.match(/^photo-moon\/(.+)$/)))
+    {
+        const Idx = MoonCatalogue.findIndex(B => B.Name === M[1]);
+        if (Idx < 0) { PushLog('MOON', `Asset \u201C${Raw}\u201D is not a known moon.`); return; }
+        const Body = MoonCatalogue[Idx];
+        State.Env.Moon.Slot = Idx;
+        State.Env.Moon.AngularDiameterDeg = Body.NaturalDeg;
+        State.SelectedId = 'env:moon';
+        PushLog('MOON', `Moon \u201C${Body.Name}\u201D applied from the Asset Browser.`);
+        RefreshAll();
     }
+    else if ((M = Raw.match(/^photo-ies-m\/(.+)$/)) && MeasuredIesProfileNames.includes(M[1]))
+        ApplyIesDeepLink(true, M[1]);
+    else if ((M = Raw.match(/^photo-ies-p\/(.+)$/)) && PresetIesNames.includes(M[1]))
+        ApplyIesDeepLink(false, M[1]);
 }
 
 function AddLightOfType(Type)
@@ -1376,32 +1387,23 @@ function SetupDomAndEvents()
 
     HydrateIcons(document);
 
-    // Populate Add-Light Drawer (all 7 luminaire types)
-    Object.entries(LightCatalogue).forEach(([Type, Spec]) => {
+    // Populate Add-Light Drawer — luminaire browsing moved out to the shared Asset Browser.
+    {
         const Btn = document.createElement('button');
         Btn.type = 'button';
         Btn.className = 'add-light-type-btn';
-        Btn.appendChild(CreatePzIcon(Spec.IconFile, Spec.Label));
         const Sp = document.createElement('span');
-        Sp.textContent = Spec.Label;
+        Sp.textContent = 'Browse luminaires\u2026';
         Btn.appendChild(Sp);
-        Btn.addEventListener('click', () => AddLightOfType(Type));
+        Btn.title = 'Open the shared Asset Browser (Photometric lights)';
+        Btn.addEventListener('click', () => { location.href = '../AssetBrowser/?ws=Photometric&kind=Light'; });
         Dom.AddLightButtons.appendChild(Btn);
-    });
+    }
 
     // Quick Photometry Presets
     const QuickContainer = document.getElementById('QuickPresetChips');
     [
-        { Label: 'ECE Low Beam', Fn: () => ApplyScenario('roadway') },
-        { Label: 'High Beam', Fn: () => {
-            const L = State.Lights.find(X => X.Type === 'ieslight');
-            if (L) { L.Props.useMeasuredIes = true; L.Props.measuredProfile = 'HighBeam'; State.SelectedId = L.Id; RefreshAll(); }
-        } },
-        { Label: 'Batwing Wash', Fn: () => {
-            const L = State.Lights.find(X => X.Type === 'ieslight');
-            if (L) { L.Props.useMeasuredIes = false; L.Props.profile = 'Batwing'; State.SelectedId = L.Id; RefreshAll(); }
-        } },
-        { Label: 'Night Moon', Fn: () => ApplyScenario('lunar') },
+        { Label: 'Browse light assets\u2026', Fn: () => { location.href = '../AssetBrowser/?ws=Photometric'; } },
         { Label: 'Isolux Scan', Fn: () => SetShadingLens(Viewport?.ShadingMode === 'lux' ? 'pbr' : 'lux') }
     ].forEach(Preset => {
         const Btn = document.createElement('button');
@@ -1586,8 +1588,7 @@ function SetupDomAndEvents()
     window.addEventListener('keydown', (E) => {
         if (E.target.tagName === 'INPUT' || E.target.tagName === 'SELECT') return;
         if (E.key === 'm' || E.key === 'M') {
-            if (Dom.IesMatrixVeil.hidden) OpenIesMatrixModal();
-            else Dom.IesMatrixVeil.hidden = true;
+            OpenIesMatrixModal();
         } else if (E.key === 'g' || E.key === 'G') {
             GizmoBtn.click();
         } else if (E.key === ' ') {
@@ -1612,4 +1613,5 @@ function SetupDomAndEvents()
 
 SetupDomAndEvents();
 RefreshAll();
+HandleAssetDeepLink();
 LoadBuiltinIesProfiles();

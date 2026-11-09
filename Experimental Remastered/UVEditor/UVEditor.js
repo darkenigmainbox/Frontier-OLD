@@ -2604,32 +2604,17 @@ function InitStudioIconsAndBindings()
         Toast(`Reset "${Fresh.name}"`);
     });
 
-    // Spawn Sample Menu
+    // Spawn Sample Menu — sample assets moved out to the shared Asset Browser.
     const SpawnMenu = document.getElementById('spawn-menu');
     const SpawnItems = document.getElementById('spawn-menu-items');
-    for (const Sample of SampleAssetCatalog)
-    {
-        const Btn = Construct('button', null, [
-            Construct('span', null, Sample.label),
-            Construct('small', null, Sample.subtitle)
-        ]);
-        Btn.type = 'button';
-        Btn.addEventListener('click', () =>
-        {
-            SpawnMenu.hidden = true;
-            const Existing = StudioState.documents.find(D => D.factoryId === Sample.id);
-            if (Existing) StudioState.activeDocId = Existing.id;
-            else
-            {
-                const Doc = CreateDocumentFromFactory(Sample);
-                StudioState.documents.push(Doc);
-                StudioState.activeDocId = Doc.id;
-            }
-            Canvas2D.FrameUdimTiles(ActiveDoc().udimTiles);
-            SyncAllViews(true);
-        });
-        SpawnItems.append(Btn);
-    }
+    const BrowseBtn = Construct('button', null, [
+        Construct('span', null, 'Browse UV assets…'),
+        Construct('small', null, 'Open the shared Asset Browser (UV Studio)')
+    ]);
+    BrowseBtn.type = 'button';
+    BrowseBtn.id = 'spawn-browse-assets';
+    BrowseBtn.addEventListener('click', () => { location.href = '../AssetBrowser/?ws=UV%20Studio'; });
+    SpawnItems.append(BrowseBtn);
     document.getElementById('spawn-tab-btn').addEventListener('click', E =>
     {
         const R = E.currentTarget.getBoundingClientRect();
@@ -2720,6 +2705,32 @@ function InitStudioIconsAndBindings()
         };
         DownloadBlob(`${Doc.name.replace(/\s+/g, '_')}_Budgets.json`, JSON.stringify(Payload, null, 2), 'application/json');
     });
+}
+
+/* Asset Browser deep link: ?asset=uv/<sample-id> activates the matching sample tab. */
+function OpenSampleAsset(SampleId)
+{
+    const Sample = SampleAssetCatalog.find(S => S.id === SampleId);
+    if (!Sample) return false;
+    const Existing = StudioState.documents.find(D => D.factoryId === Sample.id);
+    if (Existing) StudioState.activeDocId = Existing.id;
+    else
+    {
+        const Doc = CreateDocumentFromFactory(Sample);
+        StudioState.documents.push(Doc);
+        StudioState.activeDocId = Doc.id;
+    }
+    Canvas2D.FrameUdimTiles(ActiveDoc().udimTiles);
+    SyncAllViews(true);
+    return true;
+}
+function HandleAssetDeepLink()
+{
+    const Raw = new URLSearchParams(location.search).get('asset') || '';
+    const Match = Raw.match(/^uv\/([A-Za-z0-9_]+)$/);
+    if (!Match) return;
+    if (OpenSampleAsset(Match[1])) Toast(`Loaded \u201C${ActiveDoc().name}\u201D from the Asset Browser`);
+    else Toast(`Asset \u201C${Raw}\u201D is not a UV Studio sample`);
 }
 
 function Bootstrap()
@@ -2823,6 +2834,7 @@ function Bootstrap()
         StudioState.documents.push(CreateDocumentFromFactory(Sample));
     }
     StudioState.activeDocId = StudioState.documents[0].id;
+    HandleAssetDeepLink();
 
     InitStudioIconsAndBindings();
     BuildQuickUnwrapDrawer();
