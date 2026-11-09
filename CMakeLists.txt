@@ -272,7 +272,10 @@ add_library(FrontierSceneEditorUI STATIC
     Frontier/Engine/Interface/ViewportChromeControls.cpp
     Frontier/Engine/Interface/Workspaces/ForceFieldWorkspace.cpp
     Frontier/Engine/Interface/Workspaces/ForceFieldWorkspaceCatalogue.cpp
-    Frontier/Engine/Interface/Workspaces/ForceFieldWorkspaceInspector.cpp)
+    Frontier/Engine/Interface/Workspaces/ForceFieldWorkspaceInspector.cpp
+    Frontier/Engine/Interface/Workspaces/ParticleWorkspace.cpp
+    Frontier/Engine/Interface/Workspaces/ParticleWorkspaceCatalogue.cpp
+    Frontier/Engine/Interface/Workspaces/ParticleWorkspaceInspector.cpp)
 target_include_directories(FrontierSceneEditorUI PUBLIC
     "${CMAKE_SOURCE_DIR}"
     "${CMAKE_SOURCE_DIR}/Frontier")

@@ -200,6 +200,10 @@ void ConstructOverviewTab(ParticleWorkspaceState& State, ControlColumn& Column, 
     {
         NoopParticleWorkspaceCommand(State, "EFFECT", "Copy settings refused", "Copy is a NOOP in this shell");
     }
+    else if (Fired == 2)
+    {
+        NoopParticleWorkspaceCommand(State, "EFFECT", "Remove effect refused", "Removing effects is a NOOP in this shell");
+    }
 }
 
 //------------------------------------------------------------------------------------------------------------------------
