@@ -131,6 +131,29 @@ Ordered by leverage against the deadline; each lands as its own commit with its 
 - **4.5** VisualEffects GPU sequence: `DualVelocityTarget`, `HeatDistortion`, `OpticalLensFlare`, `MotionBlur` render targets.
 - **4.6** Replace every remaining no-op with its bridge call, keeping each Wave 2/3 capture green as the regression gate.
 
+## Verification loop confirmed on this host (2026-11-09)
+
+`ExternalPackages/` and `EngineContent/FontArchives/` are ignored downloads, so a fresh checkout cannot configure until they are
+provisioned. The loop used by every wave below is:
+
+```sh
+pip install --user --break-system-packages -q cmake ninja fonttools==4.60.1
+python3 Automation/PrepareUI.py                       # pinned imgui/thorvg/toml++/glfw/stb/volk/Jolt + ImGui patches
+python3 Automation/PrepareFonts.py                    # 35 faces, 5 families
+cmake -S . -B Build/LinuxAgent -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON \
+      -DFRONTIER_HOST_VERIFICATION=ON -DGLFW_BUILD_WAYLAND=OFF -DGLFW_BUILD_X11=OFF \
+      -DGLFW_BUILD_EXAMPLES=OFF -DGLFW_BUILD_TESTS=OFF -DGLFW_BUILD_DOCS=OFF -DGLFW_INSTALL=OFF
+cmake --build Build/LinuxAgent --target CurveSpaceValidation EffectSpaceValidation \
+      FluidSpaceValidation CurvePlotValidation -j 8
+ctest --test-dir Build/LinuxAgent -R "CurveSpace|EffectSpace|FluidSpace|CurvePlot"
+```
+
+X11 and Wayland development packages are absent on this Linux host, hence the two GLFW toggles; no host executable needs them for
+headless ImGui verification. Baseline on the synced tree: `FluidSpaceValidation`, `CurveSpaceValidation` (26 checks),
+`CurvePlotValidation` (interactive drag plus invalid-PCHIP rejection, and `Build/LinuxAgent/CurvePlotValidation.ppm`), and
+`EffectSpaceValidation` (19 checks) — 4/4 CTests pass with GCC 12.2, `slangc` absent so shader work stays stored-archive only.
+Windows remains the delivery target; this is host verification, not a second build system.
+
 ## Out of scope
 
 Vehicle Lab and `Experimental Remastered/AssetInspector` stay out of parity scope. No node-graph editor is being written.
