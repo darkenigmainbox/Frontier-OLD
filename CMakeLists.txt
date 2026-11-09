@@ -276,7 +276,8 @@ add_library(FrontierSceneEditorUI STATIC
     Frontier/Engine/Interface/Workspaces/ParticleWorkspace.cpp
     Frontier/Engine/Interface/Workspaces/ParticleWorkspaceCatalogue.cpp
     Frontier/Engine/Interface/Workspaces/ParticleWorkspaceInspector.cpp
-    Frontier/Engine/Interface/Workspaces/FluidWorkspaceCatalogue.cpp)
+    Frontier/Engine/Interface/Workspaces/FluidWorkspaceCatalogue.cpp
+    Frontier/Engine/Interface/Workspaces/FluidWorkspaceInspector.cpp)
 target_include_directories(FrontierSceneEditorUI PUBLIC
     "${CMAKE_SOURCE_DIR}"
     "${CMAKE_SOURCE_DIR}/Frontier")
