@@ -25,8 +25,9 @@ Vehicle Lab / AssetInspector stay **out of scope** (per `RemasteredWorkspacePari
 
 Do the small foundation remainder first (**Phase F**, ~1 unit of work, headed by the
 ForceField refactor the UI labels/ranges depend on), then convert the Remastered
-studios to C++ as **UI + interaction shells with explicit NOOPs** (**Phase U**),
-then complete the engines and wire the shells (**Phase E**, after the deadline).
+editors to C++ workspaces as **UI + interaction shells with explicit NOOPs**
+(**Phase U**), then complete the engines and wire the shells (**Phase E**, after
+the deadline).
 
 Rules for NOOP shells:
 - Every control is classified: **local-state** (selection, tabs, sliders move view
@@ -34,8 +35,11 @@ Rules for NOOP shells:
   toast saying so), or **hidden**. Nothing fakes engine results.
 - The Log Stream shows real UI events (selection/view/transport changes) so each
   shell feels alive honestly.
-- Each shell exposes one narrow seam for later wiring (`Construct<Studio>Workspace`
+- Each shell exposes one narrow seam for later wiring (`Construct<Name>Workspace`
   + a view-model struct); no engine calls from shell code.
+- Naming: product shells are **Workspaces** (`ForceFieldWorkspace`,
+  `ParticleWorkspace`, `FluidWorkspace`, …). `StudioControls` / `Studio*`
+  glyph names stay because they mirror the Remastered module 1:1.
 
 ## 2. Phase F — Finish the foundation remainder (small, first)
 
@@ -65,26 +69,33 @@ Rules for NOOP shells:
   scripted pointer interaction with PPM/PNG evidence
   (`Exhibits/StudioControls/Images/VerifiedKit.*`). Colour rows, ToggleTile,
   ActionRow, PillTabs, MetricTrio, TimeSeries, EmitterInstrument, PolarDial,
-  and the studio frame ride with the per-studio shells (U1–U4) that need them.
-- [ ] **U1. ForceField & Wind Studio** (first: shared dependency, smallest stage):
+  and the workspace frame ride with the per-workspace shells (U1–U4) that need them.
+- [x] **U1. ForceField & Wind Workspace** (first: shared dependency, smallest stage):
+  DONE 2026-11-09 — `Interface/Workspaces/ForceFieldWorkspace` (shell, catalogue,
+  inspector TUs) + `ForceFieldWorkspaceValidation` (boot/pages/fold/arm-NOOP/log/
+  mode/timeline/eye/scenario/HUD/FIRE/library interaction checks, 3-page CPU-raster
+  evidence `Exhibits/ForceFieldWorkspace/Images/Verified{Source,Wind,Field}.png`).
   Outliner (master/ambient/generators/zones) · Map 2D stage (grid + influence
   envelopes + static RK2-style flow-line decor, honestly labelled) + 3D Stage
   tab · Inspector (generator card, influence-profile plot, toggles, placement,
-  shape segmented, sliders) · Timeline (static lanes, scrubbable playhead) · Log.
-  Align C++ `ForceFieldVisualization` with Remastered (drop Oblique, keep Map 2D
-  + 3D Stage).
-- [ ] **U2. Particle Studio:** Outliner (environment/effects) · stage + probe/
+  shape segmented, sliders) · Timeline (static lanes, scrubbable playhead) · Log
+  drawer + 17-type place library. Product shells are named **Workspace**, not
+  Studio (`Construct<Name>Workspace` seam). Along the way: shared-kit overflow
+  hardening (section-title ellipsis, SwitchPill caption wrap, SegmentedRow
+  shrink-to-fit — U0 evidence pixel-identical) and a `TypefaceRegistry` fix that
+  rasterizes Greek/math symbol ranges so ω/∇ labels render in production too.
+- [ ] **U2. Particle Workspace:** Outliner (environment/effects) · stage + probe/
   legend/minimap slots · Inspector (effect header, Overview/Source/Motion/Modules
   tabs) · 52-preset library list (read-only names from `.particlespace`) ·
   transport + Strike/Burst as explicit NOOPs.
-- [ ] **U3. Fluid Studio (Plume UI):** Outliner (gas domain, fire emitter, light) ·
+- [ ] **U3. Fluid Workspace (Plume UI):** Outliner (gas domain, fire emitter, light) ·
   stage grid decor · Inspector (Source/Simulation/Rendering tabs per
   `Experimental/Fluid/src/FluidPanel.js`) · 18-preset list · Bake/Trigger as
   explicit NOOPs.
-- [ ] **U4. Fracture Studio:** Outliner (celestials + destructible solids) · stage
+- [ ] **U4. Fracture Workspace:** Outliner (celestials + destructible solids) · stage
   shard decor · Inspector (Overview/Physics/Bonds/SDF tabs) · solid/solver
   presets · Strike/Bake as explicit NOOPs.
-- [ ] **U5. Photometric & Light Studio (stretch):** only if time remains; lights
+- [ ] **U5. Photometric & Light Workspace (stretch):** only if time remains; lights
   already have C++ inspectors, so this is lowest risk to defer.
 
 Per-shell exit criteria: 1:1 checklist vs the Remastered screenshot + HTML/CSS

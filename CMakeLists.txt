@@ -163,6 +163,14 @@ add_library(FrontierSceneEditorUI STATIC
     Frontier/Engine/Interface/Controls/SliderPill.cpp
     Frontier/Engine/Interface/Controls/SwitchPill.cpp
     Frontier/Engine/Interface/Controls/Toast.cpp
+    Frontier/Engine/Interface/Controls/PillTabs.cpp
+    Frontier/Engine/Interface/Controls/ToggleTile.cpp
+    Frontier/Engine/Interface/Controls/ChipToggles.cpp
+    Frontier/Engine/Interface/Controls/StatGrid.cpp
+    Frontier/Engine/Interface/Controls/ActionRow.cpp
+    Frontier/Engine/Interface/Controls/PolarDial.cpp
+    Frontier/Engine/Interface/Controls/TimeSeries.cpp
+    Frontier/Engine/Interface/Controls/HeroCard.cpp
     Frontier/Engine/Interface/Controls/PageHeading.cpp
     Frontier/Engine/Interface/Controls/RasterPlate.cpp
         Frontier/Engine/Interface/Controls/ActionRow.cpp
@@ -257,7 +265,10 @@ add_library(FrontierSceneEditorUI STATIC
     Frontier/Engine/Interface/Inspectors/Geometry/MaterialSection.cpp
     Frontier/Engine/Interface/Inspectors/Geometry/FractureSection.cpp
     Frontier/Engine/Interface/SceneInspectorPanel.cpp
-    Frontier/Engine/Interface/ViewportChromeControls.cpp)
+    Frontier/Engine/Interface/ViewportChromeControls.cpp
+    Frontier/Engine/Interface/Workspaces/ForceFieldWorkspace.cpp
+    Frontier/Engine/Interface/Workspaces/ForceFieldWorkspaceCatalogue.cpp
+    Frontier/Engine/Interface/Workspaces/ForceFieldWorkspaceInspector.cpp)
 target_include_directories(FrontierSceneEditorUI PUBLIC
     "${CMAKE_SOURCE_DIR}"
     "${CMAKE_SOURCE_DIR}/Frontier")
@@ -873,6 +884,7 @@ include(Automation/FluidSimulation.cmake)
 include(Automation/CurveEngine.cmake)
 include(Automation/VisualEffects.cmake)
 include(Automation/StudioControls.cmake)
+include(Automation/ForceFieldWorkspace.cmake)
 include(Automation/VirtualizedGeometryRendering.cmake)
 include(Automation/DirectShadingRendering.cmake)
 include(Automation/ParticleSimulationRendering.cmake)

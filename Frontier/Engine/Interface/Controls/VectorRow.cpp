@@ -34,6 +34,12 @@ constexpr uint32_t    AxisTints[3] = { 0xEF5350FF, 0x69D06DFF, 0x5B8CFFFF };
 bool VectorRow::Construct(ControlColumn& Column, const char* Id, const char* Label, const char* Unit, double Values[3], int Digits,
                           bool Bounded, double Minimum, double Maximum, bool Enabled, const char* Tooltip)
 {
+    return Construct(Column, Id, Label, Unit, Values, Digits, Bounded, Minimum, Maximum, false, Enabled, Tooltip);
+}
+
+bool VectorRow::Construct(ControlColumn& Column, const char* Id, const char* Label, const char* Unit, double Values[3], int Digits,
+                          bool Bounded, double Minimum, double Maximum, bool MonoAxes, bool Enabled, const char* Tooltip)
+{
     const ControlTheme&    Theme    = Column.QueryTheme();
     const EditorTypefaces& Faces    = Column.QueryFaces();
     ImDrawList* const      DrawList = Column.QueryDrawList();
@@ -55,22 +61,24 @@ bool VectorRow::Construct(ControlColumn& Column, const char* Id, const char* Lab
                                   FadeColour(Theme.Index, Fade), Unit);
     }
 
-    constexpr float CellTall = 30.0f;
-    constexpr float Gap      = 6.0f;
-    const ImVec2    Top      = Column.Space(CellTall, 0.0f, 15.0f);
-    const float     Wide     = (Width - 2.0f * Gap * S) / 3.0f;
+    const float CellTall = MonoAxes ? 26.0f : 30.0f;
+    const float CellRadius = MonoAxes ? 10.0f : 0.5f * CellTall;
+    constexpr float Gap  = 6.0f;
+    const ImVec2    Top  = Column.Space(CellTall, 0.0f, 15.0f);
+    const float     Wide = (Width - 2.0f * Gap * S) / 3.0f;
     ImGui::PushID(Id);
     if (!Enabled) ImGui::BeginDisabled();
     for (int Axis = 0; Axis < 3; ++Axis)
     {
         const ImVec2 Min(Top.x + static_cast<float>(Axis) * (Wide + Gap * S), Top.y);
         const ImVec2 Max(Min.x + Wide, Min.y + CellTall * S);
-        DrawList->AddRectFilled(Min, Max, FadeColour(ResolveCssColour(0x0A0A0AFF), Fade), 0.5f * CellTall * S);
-        DrawList->AddRect(Min, Max, FadeColour(Theme.SelectBorder, Fade), 0.5f * CellTall * S, ImDrawFlags_None, S);
+        DrawList->AddRectFilled(Min, Max, FadeColour(ResolveCssColour(0x0A0A0AFF), Fade), CellRadius * S);
+        DrawList->AddRect(Min, Max, FadeColour(Theme.SelectBorder, Fade), CellRadius * S, ImDrawFlags_None, S);
 
-        const float TagTop = Min.y + 0.5f * (CellTall * S - 10.0f * 1.4f * S);
+        const ImU32 TagTint = MonoAxes ? ResolveCssColour(0x5E5E5EFF) : ResolveCssColour(AxisTints[Axis]);
+        const float TagTop  = Min.y + 0.5f * (CellTall * S - 10.0f * 1.4f * S);
         (void)GlyphRun::Construct(Column, Faces.Medium, 10.0f * S, ImVec2(Min.x + 9.0f * S, GlyphRun::ResolveBaseline(TagTop, 10.0f * S, 1.4f)),
-                                  FadeColour(ResolveCssColour(AxisTints[Axis]), Fade), AxisTags[Axis]);
+                                  FadeColour(TagTint, Fade), AxisTags[Axis]);
         const float TagWide   = GlyphRun::Measure(Column, Faces.Medium, 10.0f * S, AxisTags[Axis]);
         const ImVec2 FigureMin(Min.x + 9.0f * S + TagWide + 6.0f * S, Min.y);
         const ImVec2 FigureMax(Max.x - 9.0f * S, Max.y);
@@ -112,9 +120,11 @@ bool VectorRow::Construct(ControlColumn& Column, const char* Id, const char* Lab
         {
             char Figure[48]{};
             std::snprintf(Figure, sizeof(Figure), "%.*f", Places, Values[Axis]);
-            const float NumberTop = Min.y + 0.5f * (CellTall * S - 11.5f * 1.38f * S);
-            (void)GlyphRun::Construct(Column, Faces.Regular, 11.5f * S,
-                                      ImVec2(FigureMin.x, GlyphRun::ResolveBaseline(NumberTop, 11.5f * S, 1.38f)),
+            const float FigureSize = MonoAxes ? 11.0f : 11.5f;
+            ImFont* const FigureFace = (MonoAxes && Faces.Monospace != nullptr) ? Faces.Monospace : Faces.Regular;
+            const float NumberTop = Min.y + 0.5f * (CellTall * S - FigureSize * 1.38f * S);
+            (void)GlyphRun::Construct(Column, FigureFace, FigureSize * S,
+                                      ImVec2(FigureMin.x, GlyphRun::ResolveBaseline(NumberTop, FigureSize * S, 1.38f)),
                                       FadeColour(Theme.SliderNumber, Fade), Figure);
         }
         ImGui::PopID();
