@@ -106,9 +106,21 @@ Rules for NOOP shells:
   timeline + status bar (live voxel/bounds figures) · Bake/Trigger as explicit
   NOOPs. Viewport bar uses icon-only keys with width-sharing selects so nothing
   overlaps at narrow widths.
-- [ ] **U4. Fracture Workspace:** Outliner (celestials + destructible solids) · stage
-  shard decor · Inspector (Overview/Physics/Bonds/SDF tabs) · solid/solver
-  presets · Strike/Bake as explicit NOOPs.
+- [x] **U4. Fracture Workspace:** DONE 2026-11-09 — `Interface/Workspaces/FractureWorkspace`
+  (shell, catalogue, inspector TUs) + `FractureWorkspaceValidation` (boot/select/
+  tabs/transport/strike-bake/timeline/viewport/tools/library/topbar/matrix/reset/
+  celestial interaction checks, 4-tab CPU-raster evidence
+  `Exhibits/FractureWorkspace/Images/Verified{Overview,Physics,Bonds,Sdf}.png`).
+  Outliner (7 destructible solids + sun/atmosphere/cloud celestials, census,
+  All/Solids/Sky/Baked filters) · shard stage (reticle callout, manifold/budget
+  rings, SHARDS/SOLVE/BONDS pills) · Inspector (Overview/Physics/Bonds/SDF tabs
+  per `Experimental Remastered/FractureEditor`, celestial Cycle/Optics/Coords +
+  LUT/profiles/twilight/specs + cloud pages, solver matrix, TOML record) ·
+  8-preset library (search + 6 group filters, spawn refuses) · transport +
+  4-phase timeline + status bar (live receipt figures) · Strike/Bake as explicit
+  NOOPs with latch flags. Closed-form estimators only: partition receipts, SDF
+  footprints, Spencer/Kasten-Young solar ephemeris. Shard decor uses ABGR-high
+  alpha fills (low-byte masks shift red, not alpha).
 - [ ] **U5. Photometric & Light Workspace (stretch):** only if time remains; lights
   already have C++ inspectors, so this is lowest risk to defer.
 
