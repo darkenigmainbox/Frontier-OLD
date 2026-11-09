@@ -1154,7 +1154,14 @@ void ConstructLibrarySheet(ParticleWorkspaceState& State, const EditorTypefaces&
     DrawList->AddRect(SheetMin, SheetMax, ResolveCssColour(0xFFFFFF24), 24.0f, ImDrawFlags_None, 1.0f);
     bool CloseClicked = false;
 
-    PanelCursor Sheet{ DrawList, &Faces, 1.0f, SheetMin.x + 20.0f, SheetWide - 40.0f, SheetMin.y + 20.0f };
+    // 📝 The whole sheet lives in its own child window: main-window buttons are dead wherever another child
+    //    (the inspector scroll region) overlaps them, so the Close key must be a child item to receive presses.
+    ImGui::SetCursorScreenPos(ImVec2(SheetMin.x + 20.0f, SheetMin.y + 20.0f));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
+    ImGui::BeginChild("##LibraryScroll", ImVec2(SheetWide - 40.0f, SheetTall - 40.0f), false,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    ImDrawList* const SheetList = ImGui::GetWindowDrawList();
+    PanelCursor Sheet{ SheetList, &Faces, 1.0f, SheetMin.x + 20.0f, SheetWide - 40.0f, SheetMin.y + 20.0f };
     const ImVec2 Head = Sheet.Space(30.0f, 0.0f, 4.0f);
     Sheet.Text(Faces.Light, 18.0f, Head.x, Head.y + 15.0f - 0.5f * 18.0f * 1.3f, 1.3f, ResolveCssColour(0xF4F4F4FF),
                "Preset Library", -0.3f);
@@ -1169,11 +1176,7 @@ void ConstructLibrarySheet(ParticleWorkspaceState& State, const EditorTypefaces&
     const ImVec2 Sub = Sheet.Space(16.0f, 0.0f, 10.0f);
     Sheet.Text(Faces.Regular, 11.0f, Sub.x, Sub.y, 1.4f, ResolveCssColour(0x848484FF), "52 read-only presets · staged from the lab scene");
 
-    ImGui::SetCursorScreenPos(ImVec2(SheetMin.x + 20.0f, Sheet.Y));
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
-    ImGui::BeginChild("##LibraryScroll", ImVec2(SheetWide - 40.0f, SheetMax.y - 20.0f - Sheet.Y), false,
-                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-    ImDrawList* const InnerList = ImGui::GetWindowDrawList();
+    ImDrawList* const InnerList = SheetList;
     PanelCursor       Content{ InnerList, &Faces, 1.0f, SheetMin.x + 20.0f, SheetWide - 40.0f, Sheet.Y };
 
     const int Columns = std::max(1, static_cast<int>((Content.Width + 9.0f) / (248.0f + 9.0f)));
@@ -1304,7 +1307,13 @@ void ConstructExportDialog(ParticleWorkspaceState& State, const EditorTypefaces&
     DrawList->AddRect(DialogMin, DialogMax, ResolveCssColour(0xFFFFFF24), 22.0f, ImDrawFlags_None, 1.0f);
     bool CloseClicked = false;
 
-    PanelCursor Dialog{ DrawList, &Faces, 1.0f, DialogMin.x + 20.0f, DialogWide - 40.0f, DialogMin.y + 20.0f };
+    // 📝 Like the library sheet, the dialog content lives in its own child window so its keys receive presses.
+    ImGui::SetCursorScreenPos(ImVec2(DialogMin.x + 20.0f, DialogMin.y + 20.0f));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
+    ImGui::BeginChild("##ExportScroll", ImVec2(DialogWide - 40.0f, DialogTall - 40.0f), false,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    ImDrawList* const DialogList = ImGui::GetWindowDrawList();
+    PanelCursor Dialog{ DialogList, &Faces, 1.0f, DialogMin.x + 20.0f, DialogWide - 40.0f, DialogMin.y + 20.0f };
     const ImVec2 Head = Dialog.Space(30.0f, 0.0f, 4.0f);
     Dialog.Text(Faces.Light, 18.0f, Head.x, Head.y + 15.0f - 0.5f * 18.0f * 1.3f, 1.3f, ResolveCssColour(0xF4F4F4FF),
                 "Export TOML", -0.3f);
@@ -1313,9 +1322,9 @@ void ConstructExportDialog(ParticleWorkspaceState& State, const EditorTypefaces&
 
     const ImVec2 TextBox = Dialog.Space(300.0f, 0.0f, 12.0f);
     const ImVec2 TextMax(TextBox.x + Dialog.Width, TextBox.y + 300.0f);
-    DrawList->AddRectFilled(TextBox, TextMax, ResolveCssColour(0x0B0B0BFF), 12.0f);
-    DrawList->AddRect(TextBox, TextMax, ResolveCssColour(0xFFFFFF14), 12.0f, ImDrawFlags_None, 1.0f);
-    DrawList->PushClipRect(ImVec2(TextBox.x + 10.0f, TextBox.y + 8.0f), ImVec2(TextMax.x - 10.0f, TextMax.y - 8.0f), true);
+    DialogList->AddRectFilled(TextBox, TextMax, ResolveCssColour(0x0B0B0BFF), 12.0f);
+    DialogList->AddRect(TextBox, TextMax, ResolveCssColour(0xFFFFFF14), 12.0f, ImDrawFlags_None, 1.0f);
+    DialogList->PushClipRect(ImVec2(TextBox.x + 10.0f, TextBox.y + 8.0f), ImVec2(TextMax.x - 10.0f, TextMax.y - 8.0f), true);
     float LineY = TextBox.y + 8.0f;
     int   Drawn = 0;
     int   Total = 0;
@@ -1342,7 +1351,7 @@ void ConstructExportDialog(ParticleWorkspaceState& State, const EditorTypefaces&
         Dialog.Text(Faces.Monospace, 10.0f, TextBox.x + 10.0f, TextMax.y - 8.0f - 10.0f * 1.5f, 1.5f,
                     ResolveCssColour(0x5E5E5EFF), More);
     }
-    DrawList->PopClipRect();
+    DialogList->PopClipRect();
 
     const ImVec2 Buttons = Dialog.Space(34.0f, 0.0f, 0.0f);
     const float DownloadWide = Dialog.Measure(Faces.Medium, 11.0f, "Download .toml") + 18.0f;
@@ -1351,12 +1360,12 @@ void ConstructExportDialog(ParticleWorkspaceState& State, const EditorTypefaces&
     const ImVec2 CloseMin(CloseMax.x - CloseWide, Buttons.y);
     const ImVec2 DownloadMax(CloseMin.x - 8.0f, Buttons.y + 34.0f);
     const ImVec2 DownloadMin(DownloadMax.x - DownloadWide, Buttons.y);
-    DrawList->AddRectFilled(DownloadMin, DownloadMax, ResolveCssColour(0xE8C27A2E), 17.0f);
-    DrawList->AddRect(DownloadMin, DownloadMax, ResolveCssColour(0xE8C27A66), 17.0f, ImDrawFlags_None, 1.0f);
+    DialogList->AddRectFilled(DownloadMin, DownloadMax, ResolveCssColour(0xE8C27A2E), 17.0f);
+    DialogList->AddRect(DownloadMin, DownloadMax, ResolveCssColour(0xE8C27A66), 17.0f, ImDrawFlags_None, 1.0f);
     Dialog.Text(Faces.Medium, 11.0f, DownloadMin.x + 9.0f, Buttons.y + 17.0f - 0.5f * 11.0f * 1.38f, 1.38f,
                 ResolveCssColour(0xE8C27AFF), "Download .toml");
-    DrawList->AddRectFilled(CloseMin, CloseMax, ResolveCssColour(0x1B1B1BFF), 17.0f);
-    DrawList->AddRect(CloseMin, CloseMax, ResolveCssColour(0xFFFFFF24), 17.0f, ImDrawFlags_None, 1.0f);
+    DialogList->AddRectFilled(CloseMin, CloseMax, ResolveCssColour(0x1B1B1BFF), 17.0f);
+    DialogList->AddRect(CloseMin, CloseMax, ResolveCssColour(0xFFFFFF24), 17.0f, ImDrawFlags_None, 1.0f);
     Dialog.Text(Faces.Medium, 11.0f, CloseMin.x + 9.0f, Buttons.y + 17.0f - 0.5f * 11.0f * 1.38f, 1.38f,
                 ResolveCssColour(0xE4E4E4FF), "Close");
     RecordRect(State, "Export/Download", DownloadMin, DownloadMax);
@@ -1366,6 +1375,9 @@ void ConstructExportDialog(ParticleWorkspaceState& State, const EditorTypefaces&
     }
     RecordRect(State, "Export/Close", CloseMin, CloseMax);
     if (InvisibleRect("##ExportClose", CloseMin, CloseMax)) CloseClicked = true;
+
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
 
     // 📝 The veil submits after the dialog so the dialog wins its own presses; a press anywhere else dismisses.
     RecordRect(State, "Export/Veil", RootMin, RootMax);
