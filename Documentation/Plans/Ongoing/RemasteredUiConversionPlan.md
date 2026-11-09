@@ -57,14 +57,15 @@ Rules for NOOP shells:
 
 ## 3. Phase U — Remastered UI shells in C++ (1:1 visuals, NOOP logic)
 
-- [ ] **U0. Shared Studio Kit** (pays off 5x): audit `Interface/Controls/` vs
-  `StudioControls.js` (SectionCard, Slider/Switch/Select/Text/Segmented/Vector/
-  Colour rows, ToggleTile, ActionRow, PillTabs, MetricTrio, TimeSeries,
-  EmitterInstrument, CurvePlot✔, PolarDial, Toast); port the gaps; add Remastered
-  theme tokens (charcoal surfaces, cards, pills, radii, type scale); add the
-  studio frame (top bar, scene tabs, status pills, outliner, stage, inspector,
-  transport/timeline, log); screenshot-driven CPU-raster evidence + headless
-  interaction validation per shell.
+- [x] **U0. Shared Studio Kit** (pays off 5x): DONE 2026-11-09 in `ee0b095` —
+  ported SectionCard, SegmentedRow, VectorRow, TextRow, SliderPill (typed/
+  scrubbed figure + pill track), SwitchPill, Toast, `ResolveRemastered()`
+  theme tokens, and 118 Studio/StudioField glyph outlines
+  (`Automation/GenerateStudioGlyphs.py`); `StudioControlsValidation` drives
+  scripted pointer interaction with PPM/PNG evidence
+  (`Exhibits/StudioControls/Images/VerifiedKit.*`). Colour rows, ToggleTile,
+  ActionRow, PillTabs, MetricTrio, TimeSeries, EmitterInstrument, PolarDial,
+  and the studio frame ride with the per-studio shells (U1–U4) that need them.
 - [ ] **U1. ForceField & Wind Studio** (first: shared dependency, smallest stage):
   Outliner (master/ambient/generators/zones) · Map 2D stage (grid + influence
   envelopes + static RK2-style flow-line decor, honestly labelled) + 3D Stage

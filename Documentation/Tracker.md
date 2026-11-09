@@ -2,6 +2,17 @@
 
 Single progress and violation tracker. Detailed evidence belongs in Exhibits, not competing progress reports.
 
+## Remastered UI conversion — U0 shared Studio kit (2026-11-09)
+
+- **Plan:** `Documentation/Plans/Ongoing/RemasteredUiConversionPlan.md` (Phase U, UI shells first, explicit NOOPs).
+- Ported the shared `StudioControls.js` kit to C++ 1:1 with the Remastered charcoal visuals: `SectionCard`,
+  `SegmentedRow`, `VectorRow`, `TextRow`, `SliderPill`, `SwitchPill`, `Toast`, `ControlTheme::ResolveRemastered()`,
+  and 118 `Studio*`/`StudioField*` glyph outlines via `Automation/GenerateStudioGlyphs.py`.
+- **Validation:** `StudioControlsValidation` CTest passes (scripted card toggle, segment select, track drag, figure
+  scrub, switch flip; idle rows stay quiet). Evidence: `Exhibits/StudioControls/Images/VerifiedKit.png`.
+- Host-verification configures skip the GLFW/TextureStudio window backend so headless checks build without
+  X11/Wayland headers; Windows and full Linux deliveries are unaffected.
+
 ## Fluid Editor source restoration and Remastered Particle location (2026-11-09)
 
 - **Plan:** `Documentation/Plans/Completed/RemasteredEditorSourceRestoration.md`.
