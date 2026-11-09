@@ -557,101 +557,82 @@ void ConstructLibraryPanel(FluidWorkspaceState& State, const EditorTypefaces& Fa
 
 void ConstructViewportBar(FluidWorkspaceState& State, const EditorTypefaces& Faces, ImDrawList* DrawList, ImVec2 Min, ImVec2 Max)
 {
-    PanelCursor Bar{ DrawList, &Faces, 1.0f, Min.x, Max.x - Min.x, Min.y };
+    // 📝 Icon-only keys, like the prototype's icon-button bar; the two selects split whatever width remains.
+    constexpr float KeyBox  = 40.0f;
+    constexpr float Gap     = 8.0f;
+    constexpr float Pad     = 12.0f;
+    const float     Fixed   = Pad + Gap + KeyBox + Gap + KeyBox + Gap + Gap + KeyBox + Gap + KeyBox + Gap + KeyBox + Pad;
+    const float     Avail   = Max.x - Min.x;
+    float           CamWide = 180.0f;
+    float           ChanWide = 210.0f;
+    if (Fixed + CamWide + Gap + ChanWide > Avail)
+    {
+        const float Selects = Avail - Fixed - Gap;
+        CamWide             = Selects * 180.0f / 390.0f;
+        ChanWide            = Selects - CamWide;
+        if (CamWide < 110.0f) CamWide = 110.0f;
+        if (ChanWide < 130.0f) ChanWide = 130.0f;
+    }
     static const char* Cameras[4] = { "Perspective", "Front", "Side", "Top" };
     ConstructBarSelect(State, Faces, DrawList, "CameraView", "Viewport/Camera", "Camera", Cameras, 4, State.Camera,
-                       ImVec2(Min.x + 12.0f, Min.y + 8.0f), 190.0f);
+                       ImVec2(Min.x + Pad, Min.y + 8.0f), CamWide);
 
-    auto BarKey = [&](const char* Id, const char* RectTag, const char* Glyph, const char* Label, ImVec2 KeyMin,
-                        bool Active) -> std::pair<bool, float> {
-        PanelCursor Cursor{ DrawList, &Faces, 1.0f, KeyMin.x, 0.0f, KeyMin.y };
-        const float KeyWide = Cursor.Measure(Faces.Medium, 11.0f, Label) + 46.0f;
-        const ImVec2 KeyMax(KeyMin.x + KeyWide, KeyMin.y + 29.0f);
+    auto BarKey = [&](const char* Id, const char* RectTag, const char* Glyph, ImVec2 KeyMin, bool Active) -> std::pair<bool, float> {
+        const ImVec2 KeyMax(KeyMin.x + KeyBox, KeyMin.y + 29.0f);
         DrawList->AddRectFilled(KeyMin, KeyMax, ResolveCssColour(Active ? 0xE8C27AFF : 0x0E0F12D6), 10.0f);
         DrawList->AddRect(KeyMin, KeyMax, ResolveCssColour(Active ? 0xE8C27AFF : 0xFFFFFF12), 10.0f, ImDrawFlags_None, 1.0f);
-        (void)GlyphSymbol::Construct(DrawList, Glyph, ImVec2(KeyMin.x + 10.0f, KeyMin.y + 8.5f), 12.0f, 1.8f,
+        (void)GlyphSymbol::Construct(DrawList, Glyph, ImVec2(KeyMin.x + 14.0f, KeyMin.y + 8.5f), 12.0f, 1.8f,
                                      ResolveCssColour(Active ? 0x1A1A1AFF : 0xBCBCBCFF));
-        Cursor.Text(Faces.Medium, 11.0f, KeyMin.x + 28.0f, KeyMin.y + 14.5f - 0.5f * 11.0f * 1.38f, 1.38f,
-                    ResolveCssColour(Active ? 0x1A1A1AFF : 0xBCBCBCFF), Label);
         RecordRect(State, RectTag, KeyMin, KeyMax);
-        const bool Pressed = InvisibleRect(Id, KeyMin, KeyMax);
-        return { Pressed, KeyMax.x };
+        return { InvisibleRect(Id, KeyMin, KeyMax), KeyMax.x };
     };
 
-    float KeyX = Min.x + 12.0f + 190.0f + 8.0f;
+    float KeyX = Min.x + Pad + CamWide + Gap;
     {
-        const auto [Pressed, Next] = BarKey("##Flipbook", "Viewport/Flipbook", "StudioArchive", "Flipbook", ImVec2(KeyX, Min.y + 8.0f),
-                                            false);
+        const auto [Pressed, Next] = BarKey("##Flipbook", "Viewport/Flipbook", "StudioArchive", ImVec2(KeyX, Min.y + 8.0f), false);
         if (Pressed)
         {
-            State.BakeOpen   = true;
-            State.BakeBurst  = !State.Parameters.EmitterEnabled;
+            State.BakeOpen  = true;
+            State.BakeBurst = !State.Parameters.EmitterEnabled;
         }
-        KeyX = Next + 8.0f;
+        KeyX = Next + Gap;
     }
     {
         const auto [Pressed, Next] =
-            BarKey("##Diagnostics", "Viewport/Diagnostics", "StudioActivity", "Diagnostics", ImVec2(KeyX, Min.y + 8.0f), false);
+            BarKey("##Diagnostics", "Viewport/Diagnostics", "StudioActivity", ImVec2(KeyX, Min.y + 8.0f), false);
         if (Pressed) NoopFluidWorkspaceCommand(State, "VIEW", "Diagnostics refused", "Diagnostics are a NOOP in this shell");
-        KeyX = Next + 8.0f;
     }
 
-    float RightX = Max.x - 12.0f;
+    float RightX = Max.x - Pad;
     {
-        const float Wide = 96.0f;
-        const ImVec2 KeyMin(RightX - Wide, Min.y + 8.0f);
-        DrawList->AddRectFilled(KeyMin, ImVec2(RightX, Min.y + 37.0f), ResolveCssColour(0x0E0F12D6), 10.0f);
-        DrawList->AddRect(KeyMin, ImVec2(RightX, Min.y + 37.0f), ResolveCssColour(0xFFFFFF12), 10.0f, ImDrawFlags_None, 1.0f);
-        (void)GlyphSymbol::Construct(DrawList, "StudioMaximize", ImVec2(KeyMin.x + 10.0f, Min.y + 16.5f), 12.0f, 1.8f,
-                                     ResolveCssColour(0xBCBCBCFF));
-        Bar.Text(Faces.Medium, 11.0f, KeyMin.x + 28.0f, Min.y + 22.5f - 0.5f * 11.0f * 1.38f, 1.38f,
-                 ResolveCssColour(0xBCBCBCFF), "Full");
-        RecordRect(State, "Viewport/Maximize", KeyMin, ImVec2(RightX, Min.y + 37.0f));
-        if (InvisibleRect("##Maximize", KeyMin, ImVec2(RightX, Min.y + 37.0f)))
-            NoopFluidWorkspaceCommand(State, "VIEW", "Maximize refused", "Viewport maximize is a NOOP in this shell");
-        RightX = KeyMin.x - 8.0f;
+        const ImVec2 KeyMin(RightX - KeyBox, Min.y + 8.0f);
+        const auto [Pressed, _] = BarKey("##Maximize", "Viewport/Maximize", "StudioMaximize", KeyMin, false);
+        if (Pressed) NoopFluidWorkspaceCommand(State, "VIEW", "Maximize refused", "Viewport maximize is a NOOP in this shell");
+        RightX = KeyMin.x - Gap;
     }
     {
-        const float Wide = 96.0f;
-        const ImVec2 KeyMin(RightX - Wide, Min.y + 8.0f);
-        DrawList->AddRectFilled(KeyMin, ImVec2(RightX, Min.y + 37.0f), ResolveCssColour(0x0E0F12D6), 10.0f);
-        DrawList->AddRect(KeyMin, ImVec2(RightX, Min.y + 37.0f), ResolveCssColour(0xFFFFFF12), 10.0f, ImDrawFlags_None, 1.0f);
-        (void)GlyphSymbol::Construct(DrawList, "StudioFocus", ImVec2(KeyMin.x + 10.0f, Min.y + 16.5f), 12.0f, 1.8f,
-                                     ResolveCssColour(0xBCBCBCFF));
-        Bar.Text(Faces.Medium, 11.0f, KeyMin.x + 28.0f, Min.y + 22.5f - 0.5f * 11.0f * 1.38f, 1.38f,
-                 ResolveCssColour(0xBCBCBCFF), "Focus");
-        RecordRect(State, "Viewport/Focus", KeyMin, ImVec2(RightX, Min.y + 37.0f));
-        if (InvisibleRect("##Focus", KeyMin, ImVec2(RightX, Min.y + 37.0f)))
-            NoopFluidWorkspaceCommand(State, "VIEW", "Focus refused", "Viewport focus is a NOOP in this shell");
-        RightX = KeyMin.x - 8.0f;
+        const ImVec2 KeyMin(RightX - KeyBox, Min.y + 8.0f);
+        const auto [Pressed, _] = BarKey("##Focus", "Viewport/Focus", "StudioFocus", KeyMin, false);
+        if (Pressed) NoopFluidWorkspaceCommand(State, "VIEW", "Focus refused", "Viewport focus is a NOOP in this shell");
+        RightX = KeyMin.x - Gap;
     }
     {
-        const float Wide   = 118.0f;
-        const ImVec2 KeyMin(RightX - Wide, Min.y + 8.0f);
-        const bool Active = State.Parameters.ShowBoundingBox;
-        DrawList->AddRectFilled(KeyMin, ImVec2(RightX, Min.y + 37.0f), ResolveCssColour(Active ? 0xE8C27AFF : 0x0E0F12D6), 10.0f);
-        DrawList->AddRect(KeyMin, ImVec2(RightX, Min.y + 37.0f), ResolveCssColour(Active ? 0xE8C27AFF : 0xFFFFFF12), 10.0f,
-                          ImDrawFlags_None, 1.0f);
-        (void)GlyphSymbol::Construct(DrawList, "StudioBoxes", ImVec2(KeyMin.x + 10.0f, Min.y + 16.5f), 12.0f, 1.8f,
-                                     ResolveCssColour(Active ? 0x1A1A1AFF : 0xBCBCBCFF));
-        Bar.Text(Faces.Medium, 11.0f, KeyMin.x + 28.0f, Min.y + 22.5f - 0.5f * 11.0f * 1.38f, 1.38f,
-                 ResolveCssColour(Active ? 0x1A1A1AFF : 0xBCBCBCFF), "Overlays");
-        RecordRect(State, "Viewport/Overlays", KeyMin, ImVec2(RightX, Min.y + 37.0f));
-        if (InvisibleRect("##Overlays", KeyMin, ImVec2(RightX, Min.y + 37.0f)))
+        const ImVec2 KeyMin(RightX - KeyBox, Min.y + 8.0f);
+        const auto [Pressed, _] = BarKey("##Overlays", "Viewport/Overlays", "StudioBoxes", KeyMin, State.Parameters.ShowBoundingBox);
+        if (Pressed)
         {
             State.Parameters.ShowBoundingBox = !State.Parameters.ShowBoundingBox;
             LogFluidWorkspaceValue(State, "RENDER", "Domain bounds", State.Parameters.ShowBoundingBox ? "on" : "off");
         }
-        RightX = KeyMin.x - 8.0f;
+        RightX = KeyMin.x - Gap;
     }
     static const char* Channels[9] = { "Lit", "DDD Cubes", "Density", "Temperature", "Fuel", "Velocity",
                                        "Vorticity", "Pressure", "Slice" };
     ConstructBarSelect(State, Faces, DrawList, "RenderChannel", "Viewport/Channel", "Channel", Channels, 9,
-                       State.Parameters.RenderChannel, ImVec2(RightX - 218.0f, Min.y + 8.0f), 218.0f, "RENDER", "Render channel");
+                       State.Parameters.RenderChannel, ImVec2(RightX - ChanWide, Min.y + 8.0f), ChanWide, "RENDER",
+                       "Render channel");
 }
 
-//------------------------------------------------------------------------------------------------------------------------
-//                                                    PLUME SURFACE
 //------------------------------------------------------------------------------------------------------------------------
 
 void DashedCircle(ImDrawList* DrawList, ImVec2 Centre, float Radius, ImU32 Colour, float Width, int Dashes, float Phase)
@@ -862,9 +843,9 @@ void ConstructTransportStrip(FluidWorkspaceState& State, const EditorTypefaces& 
     static const char* Speeds[4]   = { "0.25×", "0.5×", "1.0×", "2.0×" };
     static const double SpeedValue[4] = { 0.25, 0.5, 1.0, 2.0 };
     ConstructBarSelect(State, Faces, DrawList, "Speed", "Transport/Speed", "Speed", Speeds, 4, State.SpeedIndex,
-                       ImVec2(KeyX, Min.y + 17.0f), 132.0f);
+                       ImVec2(KeyX, Min.y + 17.0f), 112.0f);
     State.Parameters.TimeScale = SpeedValue[State.SpeedIndex];
-    KeyX += 132.0f + 16.0f;
+    KeyX += 112.0f + 16.0f;
     DrawList->AddCircleFilled(ImVec2(KeyX + 5.0f, Min.y + 32.0f), 4.0f, ResolveCssColour(0x7FD08AFF), 16);
     Strip.Text(Faces.Regular, 11.0f, KeyX + 14.0f, Min.y + 32.0f - 0.5f * 11.0f * 1.4f, 1.4f, ResolveCssColour(0x848484FF),
                "Live / uncached");
@@ -883,7 +864,7 @@ void ConstructTransportStrip(FluidWorkspaceState& State, const EditorTypefaces& 
 
     static const char* Bursts[5] = { "Single burst", "Shrapnel", "Cluster salvo", "Colliding waves", "Mushroom cloud" };
     ConstructBarSelect(State, Faces, DrawList, "BurstKind", "Transport/BurstKind", "Burst", Bursts, 5, State.BurstKind,
-                       ImVec2(TriggerMin.x - 8.0f - 228.0f, Min.y + 17.0f), 228.0f);
+                       ImVec2(TriggerMin.x - 8.0f - 196.0f, Min.y + 17.0f), 196.0f);
 }
 
 void ConstructTimeline(FluidWorkspaceState& State, const EditorTypefaces& Faces, ImDrawList* DrawList, ImVec2 Min, ImVec2 Max)
