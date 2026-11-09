@@ -16,6 +16,9 @@ Remastered workspace parity work and shared UI foundation are not complete.
 
 ## Remaining workspace scope
 
+The concrete sequence, the audit findings behind it, and the UI-first / no-op contract are written up in
+[`FoundationCloseoutAndWorkspaceUi.md`](FoundationCloseoutAndWorkspaceUi.md). This section stays as the scope statement.
+
 - Finish and verify the shared UI foundation before further editor-specific UI integration.
 - Continue workspace parity work within its approved scope. Keep Vehicle Lab and AssetInspector out of scope.
 - Do not present the restored browser Fluid Editor as integrated with the native C++ engine. `FluidSpace` integration,

@@ -2,6 +2,25 @@
 
 Single progress and violation tracker. Detailed evidence belongs in Exhibits, not competing progress reports.
 
+## Branch sync and workspace-UI ordering correction (2026-11-09)
+
+- This branch (`arena/8ba15f29-frontier` on `darkenigmainbox/Frontier`) was empty apart from a stub `README.md`. Synced the
+  full working tree of `egoistm1inbox/Frontier` `arena/5d87070a-frontier` at tip `c2ba0a6f` in as commit `ab9f9c6`
+  (5 832 tracked files, 394 MB) and pushed the branch. History of the upstream branch stays in that repository; this branch
+  continues from the synced content.
+- Audited the foundation claim-by-claim against the tree instead of the documents. Confirmed the Phase 3.6 / Phase 4
+  foundations are real (subject placement, `CurveSpace`, `EffectSpace`, `CurvePlot`) and confirmed four concrete defects:
+  decorative `FluidPlumeEditor`/`FractureEditor` modal stand-ins with unverified caption specs; `.forcespace` cannot carry
+  authored `ForceSourceConfiguration` records (no `SpaceSchema`, no callers, no tests); the demo's
+  `frontier-fluid-scene` document and the C++ `.fluidspace` schema are unrelated dialects with no C++ reader for the former;
+  and `Occupant*`/`Frame` naming plus the two unconnected gizmo paths are still open across `Frontier/Engine/Rendering/**`.
+- Reordered the remaining work into
+  [`FoundationCloseoutAndWorkspaceUi.md`](Plans/Ongoing/FoundationCloseoutAndWorkspaceUi.md): Wave 1 makes the documents the
+  studios draw from honest, Wave 2 builds the shared studio shell, Wave 3 ports the five Remastered workspaces as UI and
+  interaction only with every action a no-op, and Wave 4 builds the solvers that drive them. Awaiting sign-off before Wave 1
+  starts. The Fluid authoring UI is not being rewritten: `Experimental/Fluid/` remains the reference and the C++ side only
+  needs to read its document.
+
 ## Fluid Editor source restoration and Remastered Particle location (2026-11-09)
 
 - **Plan:** `Documentation/Plans/Completed/RemasteredEditorSourceRestoration.md`.
