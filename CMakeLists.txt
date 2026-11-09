@@ -156,6 +156,13 @@ add_library(FrontierSceneEditorUI STATIC
     Frontier/Engine/Interface/Controls/DiagramPen.cpp
     Frontier/Engine/Interface/Controls/DiagramCanvas.cpp
     Frontier/Engine/Interface/Controls/CurvePlot.cpp
+    Frontier/Engine/Interface/Controls/SectionCard.cpp
+    Frontier/Engine/Interface/Controls/SegmentedRow.cpp
+    Frontier/Engine/Interface/Controls/VectorRow.cpp
+    Frontier/Engine/Interface/Controls/TextRow.cpp
+    Frontier/Engine/Interface/Controls/SliderPill.cpp
+    Frontier/Engine/Interface/Controls/SwitchPill.cpp
+    Frontier/Engine/Interface/Controls/Toast.cpp
     Frontier/Engine/Interface/Controls/PageHeading.cpp
     Frontier/Engine/Interface/Controls/RasterPlate.cpp
         Frontier/Engine/Interface/Controls/ActionRow.cpp
@@ -328,6 +335,10 @@ frontier_stage_project_content(EverestProjectRuntime
     "${CMAKE_SOURCE_DIR}/EngineContent"
     "${CMAKE_SOURCE_DIR}/Projects/Everest/Content")
 
+# 📝 Host-verification sandboxes often lack X11/Wayland development headers, and every headless
+# validation executable links only Frontier* static libraries. Skip the GLFW window backend and the
+# TextureStudio windowed target there; Windows and full Linux deliveries still build both.
+if(WIN32 OR NOT FRONTIER_HOST_VERIFICATION)
 # GLFW owns windows/input on every platform; DX11 is only the legacy Windows-only exhibit's display
 # adapter, not the primary renderer, and never needs GLFW built differently per platform.
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
@@ -364,6 +375,7 @@ add_custom_command(TARGET TextureStudio POST_BUILD
 add_custom_command(TARGET TextureStudio POST_BUILD COMMAND "${CMAKE_COMMAND}" -E copy_directory
     "${CMAKE_SOURCE_DIR}/EngineContent" "$<TARGET_FILE_DIR:TextureStudio>/EngineContent")
 install(TARGETS TextureStudio RUNTIME DESTINATION .)
+endif()
 install(DIRECTORY ExternalPackages/vulkan-headers/LICENSES DESTINATION Notices/Vulkan-Headers)
 install(DIRECTORY EngineContent DESTINATION .)
 install(FILES "${IMGUI_ROOT}/LICENSE.txt" DESTINATION Notices RENAME ImGui-LICENSE.txt)
@@ -860,6 +872,7 @@ include(Automation/EnvironmentRendering.cmake)
 include(Automation/FluidSimulation.cmake)
 include(Automation/CurveEngine.cmake)
 include(Automation/VisualEffects.cmake)
+include(Automation/StudioControls.cmake)
 include(Automation/VirtualizedGeometryRendering.cmake)
 include(Automation/DirectShadingRendering.cmake)
 include(Automation/ParticleSimulationRendering.cmake)

@@ -11,3 +11,6 @@ Thumbs.db
 dist/
 build/
 coverage/
+ExternalPackages/
+EngineContent/FontArchives/
+imgui.ini
