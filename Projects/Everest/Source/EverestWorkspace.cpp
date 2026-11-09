@@ -7,6 +7,7 @@
 
 #include "Engine/Diagnostics/LogCategories.h"
 #include "Engine/Diagnostics/LogStream.h"
+#include "Frontier/Engine/Foundation/Constants.h"
 
 #if FRONTIER_EDITOR && defined(FRONTIER_WITH_INTERFACE_SDK)
 #include "Frontier/Extensions/Rendering/RenderingExtension.h"
@@ -58,7 +59,7 @@ uint32_t EnsureProjectLogCategory(std::string_view CategoryName)
 namespace
 {
 
-constexpr double DegreesToRadian = 3.14159265358979323846 / 180.0;
+constexpr double DegreesToRadian = Frontier::MathConstantsD::DegreesToRadians;
 constexpr float  NotchBandHeight = 18.0f;   // [px] the Control Centre notch tab's height (PanelExpansionTab, 18 px)
 
 // 📝 The demo's Render entity readouts (InspectorPages.js Meta): renderer and grade, TLAS instances (or the clipmap edge),
@@ -119,7 +120,7 @@ void PublishRenderReadouts(Frontier::WorldSpace& World, const SceneViewportReado
     Measured.Adapter          = Readout.Adapter;
     const auto& Settings = Pipeline->QueryConfiguration();
     char Row[96];
-    std::snprintf(Row, sizeof(Row), "%s \xC2\xB7 %u\xC3\x97%u \xC2\xB7 %.1f ms", Settings.AnalyticIllumination ? "Analytic" : (Readout.RayTracing ? "RTX" : "GTX"),
+    std::snprintf(Row, sizeof(Row), "%s \xC2\xB7 %u\xC3\x97%u \xC2\xB7 %.1f ms", Settings.DirectShading ? "Direct" : (Readout.RayTracing ? "RTX" : "GTX"),
                   Readout.ScreenExtent[0], Readout.ScreenExtent[1], Readout.RefreshMilliseconds);
     Publish("RenderPipeline", Row);
 }
@@ -996,8 +997,12 @@ void EverestWorkspace::ConstructInterface(double DeltaSeconds)
     std::array<float,3> Focus;
     if (Frontier::InspectorRuntime::Instance().ConsumeSkyFocus(Focus))
     {
-        Flight.Heading=Focus[0];Flight.Elevation=Focus[1];Flight.VerticalFieldOfView=std::clamp(double(Focus[2])*2.4,3.0,110.0)*3.141592653589793/180;
-        Flight.Velocity={0,0,0};Navigation.Mode=SceneCameraMode::Free;Navigation.Up={0,0,1};
+        Flight.Heading = Focus[0];
+        Flight.Elevation = Focus[1];
+        Flight.VerticalFieldOfView = Frontier::DegreesToRadians(std::clamp(double(Focus[2]) * 2.4, 3.0, 110.0));
+        Flight.Velocity = {0, 0, 0};
+        Navigation.Mode = SceneCameraMode::Free;
+        Navigation.Up = {0, 0, 1};
     }
     if (Overlays.Fullscreen) ConstructFullscreenViewport(Scale);
     else Dockspace.ConstructInterface(Scale);
@@ -1332,13 +1337,13 @@ void EverestWorkspace::ConstructViewportBar(const ImVec2& Min,const ImVec2& Max,
             return Names;
         }();
         auto& Settings=Pipeline->AccessConfiguration();
-        int View=Settings.AnalyticIllumination?RenderInspectionModes::AnalyticView:std::clamp(Settings.InspectionModeIndex,0,14);
+        int View=Settings.DirectShading?RenderInspectionModes::DirectShadingView:std::clamp(Settings.InspectionModeIndex,0,14);
         const float Wide=std::min(236*Scale,(Max.x-Min.x)*.30f);
         if (X+Wide<Max.x-12*Scale-3*Button-4*Gap-132*Scale &&
             ViewportChromeControls::ConstructSelectField("##DebugView",Faces,{X,Min.y+(Height-Button)*.5f},{Wide,Button},ViewNames.data(),int(ViewNames.size()),View,Scale))
         {
-            Settings.AnalyticIllumination=View==RenderInspectionModes::AnalyticView;
-            if (!Settings.AnalyticIllumination) Settings.InspectionModeIndex=View;
+            Settings.DirectShading=View==RenderInspectionModes::DirectShadingView;
+            if (!Settings.DirectShading) Settings.InspectionModeIndex=View;
             Settings.AdvanceRevision();
         }
     }

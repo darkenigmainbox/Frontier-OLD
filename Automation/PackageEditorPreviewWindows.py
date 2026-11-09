@@ -79,8 +79,8 @@ def VerifyShaderSets(Installation):
         for Entry in Entries:
             VerifySpirv(Installation / 'EngineContent/ShaderArchives' / Manifest.parent.name / Entry['file'])
         Counts[Manifest.parent.name] = len(Entries)
-    if set(Counts) != {'GlobalIllumination', 'Environment', 'VirtualizedGeometry', 'AnalyticIllumination', 'ParticleSimulation', 'Surface'}:
-        raise RuntimeError('Expected the GlobalIllumination, Environment, VirtualizedGeometry, AnalyticIllumination, ParticleSimulation and '
+    if set(Counts) != {'GlobalIllumination', 'Environment', 'VirtualizedGeometry', 'DirectShading', 'ParticleSimulation', 'Surface'}:
+        raise RuntimeError('Expected the GlobalIllumination, Environment, VirtualizedGeometry, DirectShading, ParticleSimulation and '
                            'Surface shader sets, found ' +
                            ', '.join(sorted(Counts)))
     return Counts
