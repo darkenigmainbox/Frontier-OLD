@@ -513,30 +513,23 @@ void ConstructAddDrawer(PhotometricWorkspaceState& State, const EditorTypefaces&
 void ConstructStageHud(PhotometricWorkspaceState& State, const EditorTypefaces& Faces, ImDrawList* DrawList, ImVec2 Min,
                        ImVec2 Max)
 {
+    // 📝 One compact pill row like the reference: lenses, cameras, then the room toggles. The telemetry chip
+    //    rides the stage bottom-right instead of crowding this row.
     PanelCursor Hud{ DrawList, &Faces, 1.0f, Min.x, Max.x - Min.x, Min.y };
-    // 📝 The telemetry chip is measured first so the lens pills can stop short of it; cameras and the room
-    //    toggles ride a second row because the full strip never fits beside the chip.
-    const double Klm = QueryPhotometricCensusLumens(State.Lights, 8) / 1000.0;
-    const double Lux = QueryPhotometricWallLux(State.Lights, 8);
-    char         Summary[96]{};
-    std::snprintf(Summary, sizeof(Summary), "%.1f lx @ screen · %.2f klm", Lux, Klm);
-    const float TeleWide = Hud.Measure(Faces.Regular, 10.5f, Summary) + Hud.Measure(Faces.SemiBold, 10.0f, "CPU SHELL") + 40.0f;
-    const ImVec2 TeleMax(Max.x - 14.0f, Min.y + 38.0f);
-    const ImVec2 TeleMin(TeleMax.x - TeleWide, Min.y + 12.0f);
-    const float  PillLimit = TeleMin.x - 10.0f;
-
     static const char* Lenses[4] = { "ACES PBR", "False-Colour Lux", "Goniometer", "Homologation" };
+    static const char* Cams[4]   = { "Orbit", "Top Plan", "Wall Screen", "Roadway" };
     float              PillX     = Min.x + 14.0f;
     const float        PillY     = Min.y + 12.0f;
+    const float        PillLimit = Max.x - 14.0f;
     for (int I = 0; I < 4; ++I)
     {
-        const float  Wide = Hud.Measure(Faces.Medium, 10.5f, Lenses[I]) + 22.0f;
+        const float  Wide = Hud.Measure(Faces.Medium, 10.0f, Lenses[I]) + 15.0f;
         if (PillX + Wide > PillLimit) break;
         const ImVec2 PillMin(PillX, PillY);
         const ImVec2 PillMax(PillX + Wide, PillY + 26.0f);
         const bool   Active = State.Lens == I;
         DrawList->AddRectFilled(PillMin, PillMax, ResolveCssColour(Active ? 0xE8C27A26 : 0x0E0F12D6), 13.0f);
-        Hud.Text(Faces.Medium, 10.5f, PillMin.x + 11.0f, PillY + 13.0f - 0.5f * 10.5f * 1.38f, 1.38f,
+        Hud.Text(Faces.Medium, 10.0f, PillMin.x + 7.5f, PillY + 13.0f - 0.5f * 10.0f * 1.38f, 1.38f,
                  ResolveCssColour(Active ? 0xE8C27AFF : 0xBCBCBCFF), Lenses[I]);
         char LensTag[32]{};
         std::snprintf(LensTag, sizeof(LensTag), "Stage/Lens%d", I);
@@ -544,25 +537,18 @@ void ConstructStageHud(PhotometricWorkspaceState& State, const EditorTypefaces& 
         RecordRect(State, LensTag, PillMin, PillMax);
         if (InvisibleRect("##Lens", PillMin, PillMax)) State.Lens = I;
         ImGui::PopID();
-        PillX = PillMax.x + 6.0f;
+        PillX = PillMax.x + 5.0f;
     }
-    DrawList->AddRectFilled(TeleMin, TeleMax, ResolveCssColour(0x0E0F12D6), 13.0f);
-    Hud.Text(Faces.SemiBold, 10.0f, TeleMin.x + 12.0f, Min.y + 25.0f - 0.5f * 10.0f * 1.4f, 1.4f,
-             ResolveCssColour(0x7FD08AFF), "CPU SHELL", 0.9f);
-    Hud.Text(Faces.Regular, 10.5f, TeleMin.x + 12.0f + Hud.Measure(Faces.SemiBold, 10.0f, "CPU SHELL", 0.9f) + 8.0f,
-             Min.y + 25.0f - 0.5f * 10.5f * 1.4f, 1.4f, ResolveCssColour(0xBCBCBCFF), Summary);
-
-    static const char* Cams[4] = { "Orbit", "Top Plan", "Wall Screen", "Roadway" };
-    float              CamX    = Min.x + 14.0f;
-    const float        CamY    = Min.y + 44.0f;
+    PillX += 3.0f;
     for (int I = 0; I < 4; ++I)
     {
-        const float  Wide = Hud.Measure(Faces.Medium, 10.5f, Cams[I]) + 22.0f;
-        const ImVec2 PillMin(CamX, CamY);
-        const ImVec2 PillMax(CamX + Wide, CamY + 26.0f);
+        const float  Wide = Hud.Measure(Faces.Medium, 10.0f, Cams[I]) + 15.0f;
+        if (PillX + Wide > PillLimit) break;
+        const ImVec2 PillMin(PillX, PillY);
+        const ImVec2 PillMax(PillX + Wide, PillY + 26.0f);
         const bool   Active = State.Camera == I;
         DrawList->AddRectFilled(PillMin, PillMax, ResolveCssColour(Active ? 0xE8C27A26 : 0x0E0F12D6), 13.0f);
-        Hud.Text(Faces.Medium, 10.5f, PillMin.x + 11.0f, CamY + 13.0f - 0.5f * 10.5f * 1.38f, 1.38f,
+        Hud.Text(Faces.Medium, 10.0f, PillMin.x + 7.5f, PillY + 13.0f - 0.5f * 10.0f * 1.38f, 1.38f,
                  ResolveCssColour(Active ? 0xE8C27AFF : 0xBCBCBCFF), Cams[I]);
         char CamTag[32]{};
         std::snprintf(CamTag, sizeof(CamTag), "Stage/Cam%d", I);
@@ -570,31 +556,36 @@ void ConstructStageHud(PhotometricWorkspaceState& State, const EditorTypefaces& 
         RecordRect(State, CamTag, PillMin, PillMax);
         if (InvisibleRect("##Cam", PillMin, PillMax)) State.Camera = I;
         ImGui::PopID();
-        CamX = PillMax.x + 6.0f;
+        PillX = PillMax.x + 5.0f;
     }
     {
-        const char*  Label = State.DarkRoom ? "Dark Fog Room" : "Environment Sky";
-        const float  Wide  = Hud.Measure(Faces.Medium, 10.5f, "Environment Sky") + 22.0f;
-        const ImVec2 PillMin(CamX + 10.0f, CamY);
-        const ImVec2 PillMax(PillMin.x + Wide, CamY + 26.0f);
-        DrawList->AddRectFilled(PillMin, PillMax, ResolveCssColour(State.DarkRoom ? 0xE8C27A26 : 0x0E0F12D6), 13.0f);
-        Hud.Text(Faces.Medium, 10.5f, PillMin.x + 11.0f, CamY + 13.0f - 0.5f * 10.5f * 1.38f, 1.38f,
-                 ResolveCssColour(State.DarkRoom ? 0xE8C27AFF : 0xBCBCBCFF), Label);
-        RecordRect(State, "Stage/DarkRoom", PillMin, PillMax);
-        if (InvisibleRect("##DarkRoom", PillMin, PillMax)) State.DarkRoom = !State.DarkRoom;
-        CamX = PillMax.x + 6.0f;
+        const char* Label = State.DarkRoom ? "Dark Fog Room" : "Environment Sky";
+        const float Wide  = Hud.Measure(Faces.Medium, 10.0f, "Environment Sky") + 15.0f;
+        if (PillX + 3.0f + Wide <= PillLimit)
+        {
+            const ImVec2 PillMin(PillX + 3.0f, PillY);
+            const ImVec2 PillMax(PillMin.x + Wide, PillY + 26.0f);
+            DrawList->AddRectFilled(PillMin, PillMax, ResolveCssColour(State.DarkRoom ? 0xE8C27A26 : 0x0E0F12D6), 13.0f);
+            Hud.Text(Faces.Medium, 10.0f, PillMin.x + 7.5f, PillY + 13.0f - 0.5f * 10.0f * 1.38f, 1.38f,
+                     ResolveCssColour(State.DarkRoom ? 0xE8C27AFF : 0xBCBCBCFF), Label);
+            RecordRect(State, "Stage/DarkRoom", PillMin, PillMax);
+            if (InvisibleRect("##DarkRoom", PillMin, PillMax)) State.DarkRoom = !State.DarkRoom;
+            PillX = PillMax.x + 5.0f;
+        }
     }
     {
-        const float  Wide = Hud.Measure(Faces.Medium, 10.5f, "Volumetrics") + 22.0f;
-        const ImVec2 PillMin(CamX, CamY);
-        const ImVec2 PillMax(CamX + Wide, CamY + 26.0f);
-        DrawList->AddRectFilled(PillMin, PillMax, ResolveCssColour(State.ShowGizmos ? 0xE8C27A26 : 0x0E0F12D6), 13.0f);
-        Hud.Text(Faces.Medium, 10.5f, PillMin.x + 11.0f, CamY + 13.0f - 0.5f * 10.5f * 1.38f, 1.38f,
-                 ResolveCssColour(State.ShowGizmos ? 0xE8C27AFF : 0xBCBCBCFF), "Volumetrics");
-        RecordRect(State, "Stage/Gizmos", PillMin, PillMax);
-        if (InvisibleRect("##Gizmos", PillMin, PillMax)) State.ShowGizmos = !State.ShowGizmos;
+        const float Wide = Hud.Measure(Faces.Medium, 10.0f, "Volumetrics") + 15.0f;
+        if (PillX + Wide <= PillLimit)
+        {
+            const ImVec2 PillMin(PillX, PillY);
+            const ImVec2 PillMax(PillX + Wide, PillY + 26.0f);
+            DrawList->AddRectFilled(PillMin, PillMax, ResolveCssColour(State.ShowGizmos ? 0xE8C27A26 : 0x0E0F12D6), 13.0f);
+            Hud.Text(Faces.Medium, 10.0f, PillMin.x + 7.5f, PillY + 13.0f - 0.5f * 10.0f * 1.38f, 1.38f,
+                     ResolveCssColour(State.ShowGizmos ? 0xE8C27AFF : 0xBCBCBCFF), "Volumetrics");
+            RecordRect(State, "Stage/Gizmos", PillMin, PillMax);
+            if (InvisibleRect("##Gizmos", PillMin, PillMax)) State.ShowGizmos = !State.ShowGizmos;
+        }
     }
-
 }
 
 void ConstructLightStage(PhotometricWorkspaceState& State, const EditorTypefaces& Faces, ImDrawList* DrawList,
@@ -674,6 +665,24 @@ void ConstructLightStage(PhotometricWorkspaceState& State, const EditorTypefaces
 
     Surface.Text(Faces.Regular, 10.0f, Min.x + 14.0f, Max.y - 26.0f, 1.4f, ResolveCssColour(0x5E5E5EFF),
                  "Staged values only · markers & cones are static shell decor");
+
+    // 📝 Bottom-right telemetry chip, where the reference parks its backend readout.
+    {
+        const double Klm = QueryPhotometricCensusLumens(State.Lights, 8) / 1000.0;
+        const double Lux = QueryPhotometricWallLux(State.Lights, 8);
+        char         Summary[96]{};
+        std::snprintf(Summary, sizeof(Summary), "%.1f lx @ screen · %.2f klm", Lux, Klm);
+        const float  BackWide = Surface.Measure(Faces.SemiBold, 9.5f, "CPU SHELL", 0.9f);
+        const float  SumWide  = Surface.Measure(Faces.Regular, 10.5f, Summary);
+        const float  ChipWide = (BackWide > SumWide ? BackWide : SumWide) + 24.0f;
+        const ImVec2 ChipMax(Max.x - 14.0f, Max.y - 12.0f);
+        const ImVec2 ChipMin(ChipMax.x - ChipWide, ChipMax.y - 52.0f);
+        DrawList->AddRectFilled(ChipMin, ChipMax, ResolveCssColour(0x0E0F12D6), 12.0f);
+        Surface.Text(Faces.SemiBold, 9.5f, ChipMin.x + 12.0f, ChipMin.y + 7.0f, 1.4f,
+                     ResolveCssColour(0x7FD08AFF), "CPU SHELL", 0.9f);
+        Surface.Text(Faces.Regular, 10.5f, ChipMin.x + 12.0f, ChipMin.y + 25.0f, 1.4f,
+                     ResolveCssColour(0xBCBCBCFF), Summary);
+    }
 
     ImGui::PushID("LightStage");
     RecordRect(State, "Stage/Surface", Min, Max);
@@ -979,7 +988,7 @@ void ConstructPhotometricWorkspace(PhotometricWorkspaceState& State, const Edito
     // 📝 The HUD submits before the stage surface so its pills win the shared strip; the surface starts below
     //    row two so neither paints over the other.
     ConstructStageHud(State, Faces, DrawList, CentreMin, ImVec2(StageMax.x, CentreMin.y + 120.0f));
-    ConstructLightStage(State, Faces, DrawList, ImVec2(CentreMin.x, CentreMin.y + 76.0f), StageMax);
+    ConstructLightStage(State, Faces, DrawList, ImVec2(CentreMin.x, CentreMin.y + 46.0f), StageMax);
     DrawList->AddRect(CentreMin, StageMax, ResolveCssColour(0xFFFFFF0E), 22.0f, ImDrawFlags_None, 1.0f);
 
     if (State.ConsoleOpen)

@@ -123,7 +123,7 @@ Rules for NOOP shells:
   alpha fills (low-byte masks shift red, not alpha).
 - [x] **U5. Photometric & Light Workspace (stretch):** DONE 2026-11-09 — rig tab bar
   (4 scenarios reset rig+env, stage visibility/selection/camera) · luminaire +
-  environment outliner (search, eye keys, census 12.22 klm default) · quick
+  environment outliner (search, eye keys, census 11.22 klm default · boots defaults) · quick
   photometry chips · two-row lens/camera HUD + wall-lux telemetry (faithful
   SampleStagePointLux mirror, R2>=0.25, IES screen-gain table) + isolux legend ·
   luminaire stage (markers + spot/IES cones) · diurnal transport + scrubber +

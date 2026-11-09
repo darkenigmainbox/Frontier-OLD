@@ -82,7 +82,8 @@ int main(int ArgumentCount, char** Arguments)
             Frame();
         };
 
-        // 1. Boot: the studio opens on the ECE low beam under the roadway rig; catalogues hold pinned order.
+        // 1. Boot: the studio opens on the ECE low beam with the default rig (roadway tab highlighted but not
+        //    applied); catalogues hold pinned order.
         Frame();
         Frame();
         Confirm(QueryPhotometricLightSpecCount() == 7, "The light-type catalogue lost entries");
@@ -94,16 +95,18 @@ int main(int ArgumentCount, char** Arguments)
         Confirm(std::strcmp(QueryPhotometricPresetIes(3), "ECE Low Beam") == 0, "ECE Low Beam is out of order");
         Confirm(QueryPhotometricMoonCount() == 6, "The moon catalogue lost entries");
         Confirm(State.Selected == 0, "The workspace did not boot on the ECE low beam");
-        Confirm(State.Scenario == PhotometricWorkspaceState::ScenarioRoadway, "The workspace did not boot the roadway rig");
-        Confirm(State.Camera == PhotometricWorkspaceState::CameraRoadway, "The roadway rig missed its camera");
+        Confirm(State.Scenario == PhotometricWorkspaceState::ScenarioRoadway, "The workspace did not boot the roadway tab");
+        Confirm(State.Camera == PhotometricWorkspaceState::CameraOrbit, "The workspace did not boot the orbit camera");
+        Confirm(std::fabs(State.Sun.LocalHours - 14.5) < 1.0e-9, "The workspace did not boot at 14:30 site time");
         Confirm(State.Log.size() == 1, "The boot produced the wrong number of log lines");
         Confirm(State.Log.front().Channel == "RIG", "The boot line missed its RIG channel");
         {
             const double Census = QueryPhotometricCensusLumens(State.Lights, 8);
-            Confirm(std::fabs(Census - 5190.0) < 0.5, "The roadway census missed 5.19 klm");
+            Confirm(std::fabs(Census - 11220.0) < 0.5, "The default census missed 11.22 klm");
             const double Lux = QueryPhotometricWallLux(State.Lights, 8);
-            Confirm(Lux > 29.0 && Lux < 31.0, "The wall-screen estimate left its 29-31 lx band");
-            Confirm(State.SunSolved.ElevationDeg < 5.0, "The 21:12 sun is still above the horizon band");
+            Confirm(Lux > 57.0 && Lux < 59.0, "The wall-screen estimate left its 57-59 lx band");
+            Confirm(State.SunSolved.ElevationDeg > 41.0 && State.SunSolved.ElevationDeg < 42.0,
+                    "The 14:30 sun left its 41-42° band");
         }
 
         // 2. Outliner: luminaire rows select silently; eye keys toggle visibility and the census follows.
@@ -113,7 +116,7 @@ int main(int ArgumentCount, char** Arguments)
         Confirm(State.Selected == 7, "Clicking the strip did not select it");
         Click("Outliner/Eye7");
         Confirm(!State.Lights[7].Visible, "The strip eye did not hide the strip");
-        Confirm(std::fabs(QueryPhotometricCensusLumens(State.Lights, 8) - 1950.0) < 0.5,
+        Confirm(std::fabs(QueryPhotometricCensusLumens(State.Lights, 8) - 7980.0) < 0.5,
                 "The census did not drop the hidden strip");
         Click("Outliner/Eye7");
         Confirm(State.Lights[7].Visible, "The strip eye did not restore the strip");
@@ -320,8 +323,8 @@ int main(int ArgumentCount, char** Arguments)
             std::string Stem = Arguments[1];
             const size_t Dot = Stem.rfind(".ppm");
             if (Dot != std::string::npos && Dot + 4 == Stem.size()) Stem.erase(Dot);
-            Click("TopBar/Rig0");
-            Click("Outliner/Light0");
+            ConstructPhotometricWorkspaceState(State);
+            Frame();
             RenderEvidence((Stem + "-overview.ppm").c_str());
             Click("Stage/Lens1");
             RenderEvidence((Stem + "-lux.ppm").c_str());

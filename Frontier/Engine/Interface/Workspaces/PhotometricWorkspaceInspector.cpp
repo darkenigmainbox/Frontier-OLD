@@ -236,21 +236,26 @@ void ConstructLightPreview(PhotometricWorkspaceState& State, ControlColumn& Colu
     if (State.OpenCards[PhotometricWorkspaceState::CardPreview])
     {
         DrawLightHeroCanvas(Column, Light);
-        char Caption[128]{}, Descriptor[160]{}, ReadA[96]{}, ReadB[96]{};
+        char Caption[128]{}, Descriptor[160]{};
+        char TileAL[48]{}, TileAV[64]{}, TileBL[48]{}, TileBV[64]{};
         if (Type == 0)
         {
             std::snprintf(Caption, sizeof(Caption), "Authored luminous intensity");
             std::snprintf(Descriptor, sizeof(Descriptor), "Omnidirectional / decay %.1f", P.Decay);
-            std::snprintf(ReadA, sizeof(ReadA), "At 5 m · estimate %.2f lx", P.Intensity / std::pow(5.0, P.Decay));
-            std::snprintf(ReadB, sizeof(ReadB), "Reach %.0f m", P.Distance);
+            std::snprintf(TileAL, sizeof(TileAL), "At 5 m · estimate");
+            std::snprintf(TileAV, sizeof(TileAV), "%.2f lx", P.Intensity / std::pow(5.0, P.Decay));
+            std::snprintf(TileBL, sizeof(TileBL), "Reach");
+            std::snprintf(TileBV, sizeof(TileBV), "%.0f m", P.Distance);
         }
         else if (Type == 1)
         {
             std::snprintf(Caption, sizeof(Caption), "Authored luminous intensity");
             std::snprintf(Descriptor, sizeof(Descriptor), "%.0f° cone / %d%% soft edge", P.Angle * 2.0,
                           static_cast<int>(std::round(P.Penumbra * 100.0)));
-            std::snprintf(ReadA, sizeof(ReadA), "Full cone %.1f°", P.Angle * 2.0);
-            std::snprintf(ReadB, sizeof(ReadB), "Soft edge %d %%", static_cast<int>(std::round(P.Penumbra * 100.0)));
+            std::snprintf(TileAL, sizeof(TileAL), "Full cone");
+            std::snprintf(TileAV, sizeof(TileAV), "%.1f°", P.Angle * 2.0);
+            std::snprintf(TileBL, sizeof(TileBL), "Soft edge");
+            std::snprintf(TileBV, sizeof(TileBV), "%d %%", static_cast<int>(std::round(P.Penumbra * 100.0)));
         }
         else if (Type == 2)
         {
@@ -263,8 +268,10 @@ void ConstructLightPreview(PhotometricWorkspaceState& State, ControlColumn& Colu
                               QueryPhotometricPresetIes(P.PresetProfile));
             char Scaled[40]{};
             FormatGrouped(P.Lumens * P.Multiplier, Scaled, sizeof(Scaled));
-            std::snprintf(ReadA, sizeof(ReadA), "Scaled output %s lm", Scaled);
-            std::snprintf(ReadB, sizeof(ReadB), "Field angle %.1f°", P.Cone);
+            std::snprintf(TileAL, sizeof(TileAL), "Scaled output");
+            std::snprintf(TileAV, sizeof(TileAV), "%s lm", Scaled);
+            std::snprintf(TileBL, sizeof(TileBL), "Field angle");
+            std::snprintf(TileBV, sizeof(TileBV), "%.1f°", P.Cone);
         }
         else if (Type == 3)
         {
@@ -272,8 +279,10 @@ void ConstructLightPreview(PhotometricWorkspaceState& State, ControlColumn& Colu
             std::snprintf(Descriptor, sizeof(Descriptor), "%s / %.1f × %.1f m aperture",
                           P.Aperture == 1 ? "Disk" : "Rectangle", P.Width, P.Height);
             const double Area = P.Aperture == 1 ? 3.14159265 * (P.Width * 0.5) * (P.Width * 0.5) : P.Width * P.Height;
-            std::snprintf(ReadA, sizeof(ReadA), "Aperture %.2f m²", Area);
-            std::snprintf(ReadB, sizeof(ReadB), "Emission %s", P.TwoSided ? "Two-sided" : "One-sided");
+            std::snprintf(TileAL, sizeof(TileAL), "Aperture");
+            std::snprintf(TileAV, sizeof(TileAV), "%.2f m²", Area);
+            std::snprintf(TileBL, sizeof(TileBL), "Emission");
+            std::snprintf(TileBV, sizeof(TileBV), "%s", P.TwoSided ? "Two-sided" : "One-sided");
         }
         else if (Type == 4)
         {
@@ -281,28 +290,39 @@ void ConstructLightPreview(PhotometricWorkspaceState& State, ControlColumn& Colu
             std::snprintf(Descriptor, sizeof(Descriptor), "%.1f m linear emitter", P.Length);
             char PerM[40]{};
             FormatGrouped(P.Lumens / (P.Length > 0.01 ? P.Length : 1.0), PerM, sizeof(PerM));
-            std::snprintf(ReadA, sizeof(ReadA), "Linear output %s lm/m", PerM);
-            std::snprintf(ReadB, sizeof(ReadB), "Tube radius %d mm", static_cast<int>(std::round(P.Radius * 1000.0)));
+            std::snprintf(TileAL, sizeof(TileAL), "Linear output");
+            std::snprintf(TileAV, sizeof(TileAV), "%s lm/m", PerM);
+            std::snprintf(TileBL, sizeof(TileBL), "Tube radius");
+            std::snprintf(TileBV, sizeof(TileBV), "%d mm", static_cast<int>(std::round(P.Radius * 1000.0)));
         }
         else if (Type == 5)
         {
             std::snprintf(Caption, sizeof(Caption), "Estimated luminous flux");
             std::snprintf(Descriptor, sizeof(Descriptor), "%.0f mm package / %.0f K", P.Diameter, P.Temperature);
-            std::snprintf(ReadA, sizeof(ReadA), "Driver power %.1f W", P.Watts * P.Dimmer);
-            std::snprintf(ReadB, sizeof(ReadB), "Efficacy target %.0f lm/W", P.Efficacy);
+            std::snprintf(TileAL, sizeof(TileAL), "Driver power");
+            std::snprintf(TileAV, sizeof(TileAV), "%.1f W", P.Watts * P.Dimmer);
+            std::snprintf(TileBL, sizeof(TileBL), "Efficacy target");
+            std::snprintf(TileBV, sizeof(TileBV), "%.0f lm/W", P.Efficacy);
         }
         else
         {
             std::snprintf(Caption, sizeof(Caption), "Estimated luminous flux");
             std::snprintf(Descriptor, sizeof(Descriptor), "Horizontal / %.1f m run", P.Length);
-            std::snprintf(ReadA, sizeof(ReadA), "Connected load %.1f W", P.WattsPerMetre * P.Length * P.Dimmer);
-            std::snprintf(ReadB, sizeof(ReadB), "Emitter count %d LEDs",
+            std::snprintf(TileAL, sizeof(TileAL), "Connected load");
+            std::snprintf(TileAV, sizeof(TileAV), "%.1f W", P.WattsPerMetre * P.Length * P.Dimmer);
+            std::snprintf(TileBL, sizeof(TileBL), "Emitter count");
+            std::snprintf(TileBV, sizeof(TileBV), "%d LEDs",
                           static_cast<int>(std::round(P.LedsPerMetre * P.Length)));
         }
         ConstructCaption(Column, Caption);
         ConstructCaption(Column, Descriptor);
-        ConstructCaption(Column, ReadA);
-        ConstructCaption(Column, ReadB);
+        DiagramPen Tiles = DiagramCanvas::Begin(Column, "LightReadTiles", 300.0f, 62.0f, 6.0f, 4.0f);
+        Tiles.Rect(ImVec2(0.0f, 0.0f), ImVec2(146.0f, 62.0f), IM_COL32(30, 30, 32, 255), 10.0f);
+        Tiles.Rect(ImVec2(154.0f, 0.0f), ImVec2(146.0f, 62.0f), IM_COL32(30, 30, 32, 255), 10.0f);
+        Tiles.Text(ImVec2(14.0f, 22.0f), TileAL, IM_COL32(132, 132, 132, 255), 9.5f, -1);
+        Tiles.Text(ImVec2(14.0f, 46.0f), TileAV, IM_COL32(239, 239, 239, 255), 13.0f, -1);
+        Tiles.Text(ImVec2(168.0f, 22.0f), TileBL, IM_COL32(132, 132, 132, 255), 9.5f, -1);
+        Tiles.Text(ImVec2(168.0f, 46.0f), TileBV, IM_COL32(239, 239, 239, 255), 13.0f, -1);
         if (Type == 2)
             ConstructCaption(Column, P.UseMeasuredIes ? "Measured LM-63 .ies candela grid active"
                                                       : "Illustrative preset · no measured IES data");

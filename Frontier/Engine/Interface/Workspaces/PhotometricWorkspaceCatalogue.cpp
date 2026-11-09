@@ -366,7 +366,30 @@ void ConstructPhotometricWorkspaceState(PhotometricWorkspaceState& State)
         Dst.Locked  = false;
         Dst.Props   = QueryPhotometricLightSeedProps(I);
     }
-    ApplyPhotometricScenario(State, PhotometricWorkspaceState::ScenarioRoadway);
+    // 📝 The reference boots the default rig (6/8 visible, 14:30 site time) with the roadway tab merely
+    //    highlighted; scenarios apply only when their tabs are clicked.
+    State.Sun   = PhotometricSunProps{};
+    State.Dome  = PhotometricEnvDome{};
+    State.Moon  = PhotometricMoon{};
+    State.Stars = PhotometricStars{};
+    State.Flare = PhotometricLensFlare{};
+    State.Fog   = PhotometricFog{};
+    State.Post  = PhotometricPost{};
+    State.Scenario     = PhotometricWorkspaceState::ScenarioRoadway;
+    State.Selected     = PhotometricWorkspaceState::SelectedLight0;
+    State.Lens         = PhotometricWorkspaceState::LensPbr;
+    State.Camera       = PhotometricWorkspaceState::CameraOrbit;
+    State.DarkRoom     = true;
+    State.ShowGizmos   = true;
+    State.SweepPlaying = false;
+    State.ConsoleOpen  = false;
+    State.MatrixOpen   = false;
+    State.AddDrawerOpen = false;
+    State.SearchQuery.clear();
+    State.NoopCount           = 0;
+    State.ExportIesNoopRaised = false;
+    State.ExportRigNoopRaised = false;
+    EvaluatePhotometricSun(State.Sun, State.SunSolved);
     State.Log.clear();
     AppendPhotometricWorkspaceLog(State, "RIG", "Photometric studio ready · 8 luminaires · 7 environment lights");
 }
