@@ -262,7 +262,7 @@ include(Automation/StageProjectContent.cmake)
 # Extensions (Frontier/Extensions/<Name>/): the bridges between engine systems and the applications or runtime that use them.
 add_library(FrontierRenderingExtension STATIC
     Frontier/Extensions/Rendering/RenderingExtension.cpp
-    Frontier/Extensions/Rendering/SceneGeometryOccupancy.cpp)
+    Frontier/Extensions/Rendering/SceneSubjectPlacement.cpp)
 target_link_libraries(FrontierRenderingExtension PUBLIC FrontierSceneEditorUI FrontierSceneViewport)
 add_library(FrontierParticleExtension STATIC
     Frontier/Extensions/Particle/ParticleExtension.cpp)
@@ -782,6 +782,7 @@ if(BUILD_TESTING)
     add_test(NAME ParticleSpaceValidation COMMAND ParticleSpaceValidation "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/ParticleSpaceScratch")
     set_tests_properties(ParticleSpaceValidation PROPERTIES TIMEOUT 60)
 
+
     add_executable(EverestInterfaceValidation
         Exhibits/EverestInterface/Code/EverestInterfaceValidation.cpp
         Engine/Render/StbImageWriteImplementation.cpp)
@@ -856,6 +857,8 @@ endif()
 
 include(Automation/EnvironmentRendering.cmake)
 include(Automation/FluidSimulation.cmake)
+include(Automation/CurveEngine.cmake)
+include(Automation/VisualEffects.cmake)
 include(Automation/VirtualizedGeometryRendering.cmake)
 include(Automation/DirectShadingRendering.cmake)
 include(Automation/ParticleSimulationRendering.cmake)

@@ -1,12 +1,12 @@
 /*==========================================================================================================================================
-                                                          SCENEGEOMETRYOCCUPANCY.H
+                                                          SCENESUBJECTPLACEMENT.H
 ==========================================================================================================================================*/
 // 🧩 The level's Geometry records on the scene renderer's occupants: binds each record to an occupant by name, resolves its
 //    transform and modifier stack into occupant placements for the viewport, and reports what each resolved to.
 
 #pragma once
 
-#include "Frontier/Engine/Rendering/GlobalIllumination/OccupantRelocation.h"
+#include "Frontier/Engine/Rendering/GlobalIllumination/SubjectRelocation.h"
 #include "Frontier/Engine/Rendering/GlobalIllumination/PickProjection.h"
 #include "Frontier/Engine/Rendering/GlobalIllumination/SceneStructure.h"
 #include "Frontier/Engine/Scene/GeometryLayout.h"
@@ -46,10 +46,10 @@ constexpr double GeometryMetreTolerance  = 2.0e-3;   // [m]
 [[nodiscard]] bool MatchOccupantStem(std::string_view Name, std::string_view Stem) noexcept;
 
 //------------------------------------------------------------------------------------------------------------------------
-//                                                    SCENE GEOMETRY OCCUPANCY
+//                                                    SCENE SUBJECT PLACEMENT
 //------------------------------------------------------------------------------------------------------------------------
 
-class SceneGeometryOccupancy
+class SceneSubjectPlacement
 {
   public:
     // 📝 Takes the loaded scene (its occupants as loaded are the archive's), the material records and the engine shapes it was built
@@ -60,7 +60,7 @@ class SceneGeometryOccupancy
     // 📝 The placements of every Geometry record whose configuration changed since the last call (all of them after Reset): its
     //    archive copies, its copies beyond them from the reserve, and the archive occupants nobody claims any more (hidden while the
     //    level holds Geometry records, back at the archive's placements once it holds none).
-    [[nodiscard]] std::vector<Frontier::GlobalIllumination::OccupantPlacement> ResolvePlacements(const Frontier::WorldSpace& World);
+    [[nodiscard]] std::vector<Frontier::GlobalIllumination::SubjectPlacement> ResolvePlacements(const Frontier::WorldSpace& World);
 
     // 📝 The material blocks (block, MaterialFamilyCount records) changed since the last call; the viewport writes them before it
     //    applies the placements, whose cards are captured again from them.
@@ -80,7 +80,7 @@ class SceneGeometryOccupancy
     [[nodiscard]] std::optional<uint64_t> QueryOwner(uint32_t Occupant) const;
     // 📝 The record a pick selects: the one drawn at the picked pixel, else the nearest one drawn within the pick's reach (thin parts
     //    stay easy to hit); empty where only the sky or occupants no record holds are near the pointer.
-    [[nodiscard]] std::optional<uint64_t> ResolvePickedRecord(const Frontier::GlobalIllumination::OccupantPick& Pick) const;
+    [[nodiscard]] std::optional<uint64_t> ResolvePickedRecord(const Frontier::GlobalIllumination::SubjectPick& Pick) const;
 
   private:
     struct ShownOccupant
@@ -89,7 +89,7 @@ class SceneGeometryOccupancy
         uint32_t                FacetSet = 0;
         Frontier::PlacementMatrix Placement{};
     };
-    struct Occupancy
+    struct PlacementState
     {
         std::string                                         Signature{};   // [-] stems, range, shape and claim it was bound with
         uint64_t                                            Revision = ~0ull;
@@ -106,14 +106,14 @@ class SceneGeometryOccupancy
         bool                                                Present = false;
     };
 
-    void Bind(Occupancy& Entry, const Frontier::GeometryConfiguration& Configuration) const;
-    void Resolve(Occupancy& Entry, const Frontier::GeometryConfiguration& Configuration,
-                 std::vector<Frontier::GlobalIllumination::OccupantPlacement>& Placements);
-    void Release(Occupancy& Entry, std::vector<Frontier::GlobalIllumination::OccupantPlacement>& Placements);
+    void Bind(PlacementState& Entry, const Frontier::GeometryConfiguration& Configuration) const;
+    void Resolve(PlacementState& Entry, const Frontier::GeometryConfiguration& Configuration,
+                 std::vector<Frontier::GlobalIllumination::SubjectPlacement>& Placements);
+    void Release(PlacementState& Entry, std::vector<Frontier::GlobalIllumination::SubjectPlacement>& Placements);
     [[nodiscard]] bool     AcquireReserve(uint32_t FacetSet, uint32_t& OutOccupant);
     [[nodiscard]] uint32_t ResolveParticipation(const Frontier::GlobalIllumination::OccupantEntry& Base,
                                                 const Frontier::GeometryConfiguration& Configuration) const;
-    [[nodiscard]] int32_t  ResolveOverride(const Frontier::GlobalIllumination::OccupantEntry& Base, const Occupancy& Entry) const;
+    [[nodiscard]] int32_t  ResolveOverride(const Frontier::GlobalIllumination::OccupantEntry& Base, const PlacementState& Entry) const;
 
     const Frontier::GlobalIllumination::SceneStructure* Scene_ = nullptr;
     std::vector<uint8_t>                                Materials_{};      // [-] the family table: Materials.bin, then the shapes'
@@ -129,7 +129,7 @@ class SceneGeometryOccupancy
     std::vector<int32_t>                                ReserveSet_{};     // [-] [occupant] the facet set a reserve occupant shows
     std::vector<uint8_t>                                BlockHeld_{};      // [-] material blocks in use
     std::vector<std::pair<uint32_t, std::vector<uint8_t>>> BlockWrites_{};
-    std::unordered_map<uint64_t, Occupancy>             Occupancies_{};
+    std::unordered_map<uint64_t, PlacementState>             PlacementStates_{};
     std::shared_ptr<const GeometryResolutions>          Snapshot_ = std::make_shared<const GeometryResolutions>();
     std::unordered_map<uint32_t, uint64_t>              Owners_{};         // [-] shown occupant → record token value
     uint64_t                                            Generation_ = 0;

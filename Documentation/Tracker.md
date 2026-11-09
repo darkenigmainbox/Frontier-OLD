@@ -2,8 +2,29 @@
 
 Single progress and violation tracker. Detailed evidence belongs in Exhibits, not competing progress reports.
 
+## Fluid Editor source restoration and Remastered Particle location (2026-11-09)
+
+- **Plan:** `Documentation/Plans/Completed/RemasteredEditorSourceRestoration.md`.
+- Found the latest complete non-node gas Fluid Editor in `SultanAladin/Frontier-`, branch `arena/b5d061d9-frontier`, tip
+  `7ff19ee57e11d649aff94d8f0195a4333cfe1a88` (2026-10-14). Copied `Experimental/Fluid/`, including the plume, blast,
+  wildfire/dust tornado presets and eight TOML sample scenes. Kept its original source provenance.
+- Moved the Remastered Particle Studio into `Experimental Remastered/ParticleEditor/`; updated suite links and launcher paths.
+  The older `Experimental/ParticleEditor/` reference copy remains because validation/export tools consume it.
+- **Validation:** Vite 7.3.6 build passed; Node scene/codec tests 22/22; Chromium/SwiftShader browser checks 18/18 and interaction
+  checks 9/9; static app routes 7/7 returned HTTP 200. Evidence: `Exhibits/FluidEditor/README.md` and
+  `Exhibits/FluidEditor/Images/Verification-2026-11-09/VerifiedWorkspace.png`.
+- **Limits and remaining scope:** headless browser used software WebGL; optional WebGPU fell back to WebGL2. No C++ `FluidSpace`
+  integration or native-GPU validation is claimed. Replication/release-state transport, boundary profiles, richer thermal
+  transport, extension/editor integration, broader numerical validation, and Phase 3 Rendering/Gizmo cleanup remain open.
+  Shared UI foundation/parity work also remains ongoing; Vehicle Lab and AssetInspector stay out of scope. See the completed
+  source-restoration plan and ongoing workspace-parity plan for details.
+
 ## Modular foundation — Phase 3 checkpoint (2026-11-09)
 
+- **Fluid clarification:** the C++ `FluidSpace` is a partial CPU Eulerian engine foundation, not a replacement for the editor.
+  The existing non-node gas/smoke authoring UI is restored in `Experimental/Fluid/` and browser-verified; it is still standalone
+  and not connected to the C++ solver. Preserve both facts: no new editor is needed, while a native/browser engine bridge and
+  GPU execution remain unfinished. See `Documentation/Plans/Ongoing/ModularFoundationPlan.md`.
 - Added a first headless CPU Eulerian fluid foundation in `Frontier/Engine/PhysicalDynamics/FluidDynamics/`:
   `.fluidspace` profile/configuration schema, bounded grid allocation, rotated/scaled cell coordinates, radial source projection,
   semi-Lagrangian velocity/density advection, configurable implicit smoke/vapor diffusion, buoyancy, `IFieldSampler` wind
@@ -15,6 +36,24 @@ Single progress and violation tracker. Detailed evidence belongs in Exhibits, no
 - Partial foundation only: fluid replication/release-state transport, fluid extension/editor integration, boundary profiles,
   richer thermal transport, GPU execution, and broader numerical convergence analysis remain open. Phase 3 Rendering/Gizmo
   cleanup is also outstanding.
+
+## Modular foundation — Phase 3.6 / Phase 4 kickoff (2026-11-09)
+
+- **Fluid status corrected:** the C++ CPU grid was a partial engine foundation, not the authoring UI. The existing non-node browser
+  editor is restored at `Experimental/Fluid/`, browser-verified, and still separate from the C++ `FluidSpace`; no replacement UI
+  is needed. The next Fluid work is the native/browser boundary plus the remaining GPU, boundary, thermal, replication, and
+  particle-trigger integration—not another editor. Details are in `Documentation/Plans/Ongoing/ModularFoundationPlan.md`.
+- Renamed `SceneGeometryOccupancy.{h,cpp}` to `SceneSubjectPlacement.{h,cpp}`; renamed distance-space/relocation files and
+  classes to `SubjectDistanceSpace` / `SubjectRelocation`, result types to `SubjectPlacement` / `SubjectPick`, and viewport
+  picking to `PickSubjects`. Added the `SpatialEditable` concept and `PlacementGizmo` adapters with compile-time API checks.
+  Updated build inputs, callers, and exhibit docs. Broader `Occupant*`/`Frame` cleanup, live workspace wiring of the generic gizmo,
+  facetspace resolution, and collision export remain open.
+- Started Phase 4 with `Frontier/Engine/Foundation/Curves/CurveSpace.h`: scalar linear, clamped Hermite, monotonic PCHIP,
+  validated `.curvespace` serialization, and fixed-size baked LUTs. `CurveSpaceValidation` passes 26 checks with GCC 12.2.
+- Added the declarative `VisualEffectProfile`/`EffectSpace` `.effectspace` schema with spatial and replication profiles;
+  `EffectSpaceValidation` passes 19 checks. This is not a GPU render sequence.
+- **Still open:** CurveSpace consumers; the EffectSpace evaluation/render-target/GPU pipeline; the remaining 3.6 naming, gizmo, and
+  placement work; and a native/browser Fluid boundary. No curve editor UI or engine/editor Fluid integration is claimed.
 
 ## EngineUpdate status
 

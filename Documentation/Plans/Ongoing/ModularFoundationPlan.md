@@ -5,6 +5,11 @@
 This plan defines the full modular rewrite and C++20 generic architecture for **Frontier** and **Project Everest**
 from the `56279e1` baseline on branch `arena/bfba53e1-frontier`.
 
+**Execution update (2026-11-09):** The Fluid browser authoring UI is present at `Experimental/Fluid/`, restored from the
+latest inspected Frontier- source and browser-verified. It is a standalone JavaScript prototype; it is not connected to the
+C++ `FluidSpace`. Do not write a replacement editor or infer that the native solver has UI integration. The current C++ CPU
+solver is a partial engine foundation, not a reason to defer the separately available authoring UI.
+
 - **No Editor or UI work in this phase:** Do not modify `UI/`, ImGui panels, inspectors, docking chrome, or modal
   windows until the engine, simulation spaces, codecs, and extensions rest on a verified C++20 foundation.
 - **Preserved untouched domains:** Keep `SolidArc`, `TextureStudio` / `TextureWorkspace`, and
@@ -201,14 +206,25 @@ Rewrite and harden each foundational space and extension over Phases 1–2 (and 
        `FluidBurstTriggerEvent` (thermal / vapor / smoke channels) into preset-scaled bursts — zero bespoke
        `ImpactSpark.slang` shader needed!
 5. **Fluid Foundation (`Frontier/Engine/PhysicalDynamics/FluidDynamics/` + `Extensions/Fluid/` + `.fluidspace`):**
-   - Build a clean headless CPU/GPU Eulerian solver space (`FluidSpace` + `FluidSimulationSequence` +
-     `FluidSourceProjector` template `ProjectSource<SourceT>()`) linking `SpatialProfile`, `ThermalProfile`,
-     `ForceFieldSpace` wind coupling, `ReplicationProfile` (syncing release source state, burst seeds, and simulation
-     clock), and `ParticleTriggerRouter` hooks (triggering embers/ash/debris/heat-shimmer presets from fluid bursts).
+   - **Current partial C++ baseline (2026-11-09):** `FluidSpace` + `FluidSimulationSequence` provide a validated CPU Eulerian
+     grid, `.fluidspace` schema, source projection, advection/diffusion/buoyancy/pressure projection, wind sampling, and burst
+     trigger extraction. This is not a GPU solver or a completed fluid extension.
+   - **Existing authoring UI:** the full gas/smoke browser editor and its WebGL2/experimental WebGPU engines are in
+     `Experimental/Fluid/`. Preserve that UI and its effect authoring model; it is a separate prototype, not a node editor,
+     and currently does not call into the C++ solver. Its source and verification are documented in
+     `Documentation/Plans/Completed/RemasteredEditorSourceRestoration.md`.
+   - **Remaining engine work:** define a deliberate browser/native interchange or native editor bridge; add an actual GPU
+     execution path only after the engine/UI boundary is specified; complete boundary profiles, thermal transport,
+     replication of authored/release state and simulation clock, and `ParticleTriggerRouter` coupling for fluid bursts.
+     Do not replace the existing browser UI with another editor.
 6. **Rendering & Unified `GizmoSpace` Cleanup (Purging Banned Vocabulary):**
-   - Rename and rewrite legacy `SceneGeometryOccupancy` -> `SceneSubjectPlacement` and legacy `OccupantDistanceSpace`
-     / `OccupantRelocation` / `PickProjection` `Occupant*` -> `SubjectDistanceSpace` / `SubjectRelocation` /
-     `SubjectPick` (removing all `Occupant`/`Occupancy`/`Frame` identifiers).
+   - **Checkpoint (2026-11-09):** renamed `SceneGeometryOccupancy.{h,cpp}` to `SceneSubjectPlacement.{h,cpp}`;
+     renamed the distance-space and relocation source/classes to `SubjectDistanceSpace` / `SubjectRelocation`, plus the
+     placement and pick result types to `SubjectPlacement` / `SubjectPick` and the viewport query to `PickSubjects`. Added the
+     `SpatialEditable` concept and generic `PlacementGizmo` profile adapters, with compile-time API checks in the geometry
+     validation source. Syntax checks cover the renamed translation units and geometry/pick validation sources. The wider
+     vocabulary cleanup is still open for legacy `OccupantEntry`/`Occupants` records, GPU interface names, and `Frame` identifiers;
+     active record/workspace wiring of the new gizmo adapter is also pending.
    - Resolve `<ArchiveStem>.facetspace` dynamically and export bounded `TriangleSurfaceShape` collision triangles from
      `SceneSubjectPlacement` to `PhysicsExtension`.
    - Generalize `GizmoSpace` / `PlacementGizmo` via a C++20 `SpatialEditable` concept so one gizmo binds to any entry
@@ -217,6 +233,12 @@ Rewrite and harden each foundational space and extension over Phases 1–2 (and 
 ---
 
 ### Phase 4 — Curve Engine (`CurveSpace`) & Unified Visual Effects Architecture (`EffectSpace`)
+
+**Checkpoint (2026-11-09):** Added scalar `CurveProfile<double>` / `CurveSpace` evaluation (linear, clamped Hermite, and
+monotonic PCHIP), baked fixed-size LUTs, transactional validation, and `.curvespace` codec; its validation passes 26 checks.
+Added `VisualEffectProfile` / `EffectSpace` data, spatial/replication metadata, semantic checks, and `.effectspace` codec; its
+validation passes 19 checks. These are data foundations only—not complete integration into Physics/ForceField/Particle/Fluid,
+not the planned GPU `VisualEffects` sequence, and not editor UI. Authoring UI remains deferred.
 
 1. **Curve Engine & `.curvespace` Foundation (`Frontier/Engine/Foundation/Curves/`):**
    - **Note:** Engine/data/math layer only (ImGui curve-drawing UI waits for the post-foundation Editor phase).

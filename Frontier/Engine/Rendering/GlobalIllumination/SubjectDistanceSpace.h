@@ -1,7 +1,7 @@
 /*==========================================================================================================================================
-                                                        OCCUPANTDISTANCESPACE.H
+                                                        SUBJECTDISTANCESPACE.H
 ==========================================================================================================================================*/
-// 🧩 Per-facet-set signed distance volumes stacked in one 3D texel space, transferred on the device (OccupantDistanceSpace.js).
+// 🧩 Per-facet-set signed distance volumes stacked in one 3D texel space, transferred on the device (SubjectDistanceSpace.js).
 
 #pragma once
 
@@ -34,22 +34,22 @@ struct FragmentGeometry
     Vector3                             Maximum{};
 };
 
-class OccupantDistanceSpace
+class SubjectDistanceSpace
 {
   public:
-    OccupantDistanceSpace(DeviceExchange& Exchange, ShaderInterchange& Shaders);
+    SubjectDistanceSpace(DeviceExchange& Exchange, ShaderInterchange& Shaders);
 
     // ① choose each volume's voxel and resolution; ② stack them along z with one-texel gaps; ③ transfer slab by slab.
     bool ConstructVolumes(SceneStructure& Scene, double VoxelScale, std::string* OutDiagnostic = nullptr);
-    [[nodiscard]] const OccupantVolume* QueryVolume(const SceneStructure& Scene, uint32_t FacetSetIndex) const;
+    [[nodiscard]] const SubjectVolume* QueryVolume(const SceneStructure& Scene, uint32_t FacetSetIndex) const;
 
     void ConstructFragmentProgram();
-    std::optional<OccupantVolume> AllocateFragment(uint32_t Owner, const FragmentGeometry& Fragment,
+    std::optional<SubjectVolume> AllocateFragment(uint32_t Owner, const FragmentGeometry& Fragment,
                                                    const std::function<void(uint32_t)>& Evict);
-    void     ReleaseFragment(const OccupantVolume& Volume, uint32_t Slot);
+    void     ReleaseFragment(const SubjectVolume& Volume, uint32_t Slot);
     uint32_t RecordFragments(CommandSequence& Sequence);
 
-    std::vector<OccupantVolume>        Volumes{};
+    std::vector<SubjectVolume>        Volumes{};
     std::shared_ptr<DeviceTexture>     Texture{};
     std::shared_ptr<DeviceTextureView> TextureView{};
     std::array<uint32_t, 3>            SpaceExtent{0, 0, 0};
@@ -58,7 +58,7 @@ class OccupantDistanceSpace
     struct FragmentJob
     {
         uint32_t         Slot = 0;
-        OccupantVolume   Volume{};
+        SubjectVolume   Volume{};
         FragmentGeometry Fragment{};
     };
 

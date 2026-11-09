@@ -238,15 +238,15 @@ SceneViewportRefresh RenderingExtension::Render(const SceneViewportRequest& Requ
     {
         Pick_        = {};
         Pick_.Serial = Request.PickSerial;
-        Frontier::GlobalIllumination::OccupantPick Seen;
+        Frontier::GlobalIllumination::SubjectPick Seen;
         std::string                                Diagnostic;
         if (Viewport_->QueryScene() != GeometryScene_)
         {
             Pick_.Failure = "the scene was rebuilt since the image was made";
         }
-        else if (Viewport_->PickOccupants(Request.PickPoint, Seen, &Diagnostic))
+        else if (Viewport_->PickSubjects(Request.PickPoint, Seen, &Diagnostic))
         {
-            Pick_.Occupant     = Seen.QueryOccupant(0, 0);
+            Pick_.Occupant     = Seen.QuerySubject(0, 0);
             Pick_.Record       = Geometry_.ResolvePickedRecord(Seen);
             Pick_.Milliseconds = Seen.Milliseconds;
         }
@@ -271,7 +271,7 @@ SceneViewportRefresh RenderingExtension::Render(const SceneViewportRequest& Requ
         // 📝 The objects' own surfaces first: the placements capture their cards again from them.
         for (const auto& [Block, Records] : Geometry_.ConsumeMaterialBlocks())
             if (auto* Host = Viewport_->AccessHost()) (void)Host->WriteMaterialBlock(Block, Records);
-        (void)Viewport_->RelocateOccupants(Placements);
+        (void)Viewport_->RelocateSubjects(Placements);
     }
 
     // ③ one refresh through the level's records; with live refresh off the last image stays (Render settings › Refresh timing)

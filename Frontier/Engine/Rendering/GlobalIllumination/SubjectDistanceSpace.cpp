@@ -1,9 +1,9 @@
 /*==========================================================================================================================================
-                                                       OCCUPANTDISTANCESPACE.CPP
+                                                       SUBJECTDISTANCESPACE.CPP
 ==========================================================================================================================================*/
-// 🧩 Per-facet-set signed distance volumes stacked in one 3D texel space, transferred on the device (OccupantDistanceSpace.js).
+// 🧩 Per-facet-set signed distance volumes stacked in one 3D texel space, transferred on the device (SubjectDistanceSpace.js).
 
-#include "OccupantDistanceSpace.h"
+#include "SubjectDistanceSpace.h"
 
 #include "BoundingStructure.h"
 
@@ -49,12 +49,12 @@ uint16_t PackHalf(float Scalar) noexcept
 }
 } // namespace
 
-OccupantDistanceSpace::OccupantDistanceSpace(DeviceExchange& Exchange, ShaderInterchange& Shaders)
+SubjectDistanceSpace::SubjectDistanceSpace(DeviceExchange& Exchange, ShaderInterchange& Shaders)
     : Exchange_(Exchange), Shaders_(Shaders)
 {
 }
 
-bool OccupantDistanceSpace::ConstructVolumes(SceneStructure& Scene, double VoxelScale, std::string* OutDiagnostic)
+bool SubjectDistanceSpace::ConstructVolumes(SceneStructure& Scene, double VoxelScale, std::string* OutDiagnostic)
 {
     // 📝 A JS Set keeps first-insertion order; the volumes follow the occupants' first use of each facet set.
     std::vector<uint32_t> Required;
@@ -73,7 +73,7 @@ bool OccupantDistanceSpace::ConstructVolumes(SceneStructure& Scene, double Voxel
         if (Set.BakedVolume)
         {
             // 📝 A baked engine shape keeps the layout it was baked for at every quality grade.
-            OccupantVolume Volume;
+            SubjectVolume Volume;
             Volume.FacetSet    = SetIndex;
             Volume.VoxelExtent = Set.BakedVolume->VoxelExtent;
             Volume.Resolution  = Set.BakedVolume->Resolution;
@@ -93,7 +93,7 @@ bool OccupantDistanceSpace::ConstructVolumes(SceneStructure& Scene, double Voxel
         double Longest = -INFINITY;
         for (int Axis = 0; Axis < 3; ++Axis) Longest = std::max(Longest, Extent[Axis] + 2.0 * Margin());
         if (Longest / Voxel > MaximumVolumeTexels) Voxel = Longest / MaximumVolumeTexels;
-        OccupantVolume Volume;
+        SubjectVolume Volume;
         Volume.FacetSet    = SetIndex;
         Volume.VoxelExtent = Voxel;
         for (int Axis = 0; Axis < 3; ++Axis)
@@ -155,7 +155,7 @@ bool OccupantDistanceSpace::ConstructVolumes(SceneStructure& Scene, double Voxel
 
     for (size_t VolumeIndex = 0; VolumeIndex < Volumes.size(); ++VolumeIndex)
     {
-        const OccupantVolume& Volume = Volumes[VolumeIndex];
+        const SubjectVolume& Volume = Volumes[VolumeIndex];
         const FacetSet&    Set = Scene.FacetSets[Volume.FacetSet];
         if (Set.BakedVolume)
         {
@@ -224,7 +224,7 @@ bool OccupantDistanceSpace::ConstructVolumes(SceneStructure& Scene, double Voxel
     return true;
 }
 
-const OccupantVolume* OccupantDistanceSpace::QueryVolume(const SceneStructure& Scene, uint32_t FacetSetIndex) const
+const SubjectVolume* SubjectDistanceSpace::QueryVolume(const SceneStructure& Scene, uint32_t FacetSetIndex) const
 {
     const int32_t Index = Scene.FacetSets[FacetSetIndex].VolumeIndex;
     return Index >= 0 ? &Volumes[static_cast<size_t>(Index)] : nullptr;
@@ -234,7 +234,7 @@ const OccupantVolume* OccupantDistanceSpace::QueryVolume(const SceneStructure& S
 //                                                   FRAGMENT POOL
 //------------------------------------------------------------------------------------------------------------------------
 
-void OccupantDistanceSpace::ConstructFragmentProgram()
+void SubjectDistanceSpace::ConstructFragmentProgram()
 {
     const std::array<DescriptorSlot, 3> Slots = {{{DescriptorCode::StorageRead}, {DescriptorCode::StorageRead},
                                                   {DescriptorCode::StorageTexture3D, TextureFormat::Rgba16Float}}};
@@ -245,7 +245,7 @@ void OccupantDistanceSpace::ConstructFragmentProgram()
     FragmentGroup_   = Exchange_.ConstructDescriptorGroup(FragmentLayout_, {JobRegion_, GeometryRegion_, TextureView}, "Fragment distance");
 }
 
-std::optional<OccupantVolume> OccupantDistanceSpace::AllocateFragment(uint32_t Owner, const FragmentGeometry& Fragment,
+std::optional<SubjectVolume> SubjectDistanceSpace::AllocateFragment(uint32_t Owner, const FragmentGeometry& Fragment,
                                                                       const std::function<void(uint32_t)>& Evict)
 {
     if (!FragmentProgram_ || Fragment.Triangles.size() > FragmentPool.MaxTriangles || Fragment.Planes.size() > FragmentPool.MaxPlanes)
@@ -270,7 +270,7 @@ std::optional<OccupantVolume> OccupantDistanceSpace::AllocateFragment(uint32_t O
     double Largest = 0.02;
     for (int Axis = 0; Axis < 3; ++Axis) Largest = std::max(Largest, Fragment.Maximum[Axis] - Fragment.Minimum[Axis]);
     const double   Voxel = Largest / (Edge - 4);
-    OccupantVolume Volume;
+    SubjectVolume Volume;
     for (int Axis = 0; Axis < 3; ++Axis)
     {
         const double Centre = 0.5 * (Fragment.Minimum[Axis] + Fragment.Maximum[Axis]);
@@ -285,7 +285,7 @@ std::optional<OccupantVolume> OccupantDistanceSpace::AllocateFragment(uint32_t O
     return Volume;
 }
 
-void OccupantDistanceSpace::ReleaseFragment(const OccupantVolume& Volume, uint32_t Slot)
+void SubjectDistanceSpace::ReleaseFragment(const SubjectVolume& Volume, uint32_t Slot)
 {
     (void)Volume;
     if (PoolOwners_[Slot] < 0) return;
@@ -296,7 +296,7 @@ void OccupantDistanceSpace::ReleaseFragment(const OccupantVolume& Volume, uint32
     PoolFree_.push_back(Slot);
 }
 
-uint32_t OccupantDistanceSpace::RecordFragments(CommandSequence& Sequence)
+uint32_t SubjectDistanceSpace::RecordFragments(CommandSequence& Sequence)
 {
     if (!FragmentProgram_ || PoolQueue_.empty()) return 0;
     const size_t Count = std::min<size_t>(FragmentPool.JobsPerRefresh, PoolQueue_.size());

@@ -1,10 +1,10 @@
 /*==========================================================================================================================================
-                                                         SCENEGEOMETRYOCCUPANCY.CPP
+                                                         SCENESUBJECTPLACEMENT.CPP
 ==========================================================================================================================================*/
 // 🧩 The level's Geometry records on the scene renderer's occupants: binds each record to an occupant by name, resolves its
 //    transform and modifier stack into occupant placements for the viewport, and reports what each resolved to.
 
-#include "Frontier/Extensions/Rendering/SceneGeometryOccupancy.h"
+#include "Frontier/Extensions/Rendering/SceneSubjectPlacement.h"
 
 #include "Frontier/Engine/Rendering/GlobalIllumination/IlluminationHost.h"
 
@@ -77,10 +77,10 @@ bool MatchOccupantStem(std::string_view Name, std::string_view Stem) noexcept
 }
 
 //------------------------------------------------------------------------------------------------------------------------
-//                                                    SCENE GEOMETRY OCCUPANCY
+//                                                    SCENE SUBJECT PLACEMENT
 //------------------------------------------------------------------------------------------------------------------------
 
-void SceneGeometryOccupancy::Reset(const Frontier::GlobalIllumination::SceneStructure* Scene, std::vector<uint8_t> MaterialProfiles,
+void SceneSubjectPlacement::Reset(const Frontier::GlobalIllumination::SceneStructure* Scene, std::vector<uint8_t> MaterialProfiles,
                                    std::vector<Frontier::ShapeArchive> Shapes)
 {
     using namespace Frontier::GlobalIllumination;
@@ -104,7 +104,7 @@ void SceneGeometryOccupancy::Reset(const Frontier::GlobalIllumination::SceneStru
     ReserveSet_.clear();
     BlockHeld_.assign(MaterialBlockCapacity, 0u);
     BlockWrites_.clear();
-    Occupancies_.clear();
+    PlacementStates_.clear();
     if (Scene_ != nullptr)
     {
         Archive_.reserve(Scene_->Occupants.size());
@@ -138,18 +138,18 @@ void SceneGeometryOccupancy::Reset(const Frontier::GlobalIllumination::SceneStru
     ++Generation_;
 }
 
-const Frontier::PlacementMatrix* SceneGeometryOccupancy::QueryArchiveTransform(uint32_t Occupant) const noexcept
+const Frontier::PlacementMatrix* SceneSubjectPlacement::QueryArchiveTransform(uint32_t Occupant) const noexcept
 {
     return Occupant < Archive_.size() ? &Archive_[Occupant] : nullptr;
 }
 
-std::optional<uint64_t> SceneGeometryOccupancy::QueryOwner(uint32_t Occupant) const
+std::optional<uint64_t> SceneSubjectPlacement::QueryOwner(uint32_t Occupant) const
 {
     const auto Found = Owners_.find(Occupant);
     return Found != Owners_.end() ? std::optional<uint64_t>(Found->second) : std::nullopt;
 }
 
-std::optional<uint64_t> SceneGeometryOccupancy::ResolvePickedRecord(const Frontier::GlobalIllumination::OccupantPick& Pick) const
+std::optional<uint64_t> SceneSubjectPlacement::ResolvePickedRecord(const Frontier::GlobalIllumination::SubjectPick& Pick) const
 {
     // 📝 Nearest first within a disc of the pick's reach; the picked pixel itself is distance 0, so what is drawn there always wins.
     std::optional<uint64_t> Nearest;
@@ -160,8 +160,8 @@ std::optional<uint64_t> SceneGeometryOccupancy::ResolvePickedRecord(const Fronti
         {
             const int32_t Distance = OffsetX * OffsetX + OffsetY * OffsetY;
             if (Distance >= Best) continue;
-            const uint32_t Occupant = Pick.QueryOccupant(OffsetX, OffsetY);
-            if (Occupant == Frontier::GlobalIllumination::OccupantPick::NoOccupant) continue;
+            const uint32_t Occupant = Pick.QuerySubject(OffsetX, OffsetY);
+            if (Occupant == Frontier::GlobalIllumination::SubjectPick::NoSubject) continue;
             if (const auto Owner = QueryOwner(Occupant))
             {
                 Nearest = Owner;
@@ -171,7 +171,7 @@ std::optional<uint64_t> SceneGeometryOccupancy::ResolvePickedRecord(const Fronti
     return Nearest;
 }
 
-std::vector<std::pair<uint32_t, std::vector<uint8_t>>> SceneGeometryOccupancy::ConsumeMaterialBlocks()
+std::vector<std::pair<uint32_t, std::vector<uint8_t>>> SceneSubjectPlacement::ConsumeMaterialBlocks()
 {
     return std::exchange(BlockWrites_, {});
 }
@@ -180,7 +180,7 @@ std::vector<std::pair<uint32_t, std::vector<uint8_t>>> SceneGeometryOccupancy::C
 //                                                    BINDING
 //------------------------------------------------------------------------------------------------------------------------
 
-void SceneGeometryOccupancy::Bind(Occupancy& Entry, const Frontier::GeometryConfiguration& Configuration) const
+void SceneSubjectPlacement::Bind(PlacementState& Entry, const Frontier::GeometryConfiguration& Configuration) const
 {
     using namespace Frontier;
     using namespace Frontier::GlobalIllumination;
@@ -317,7 +317,7 @@ void SceneGeometryOccupancy::Bind(Occupancy& Entry, const Frontier::GeometryConf
 //                                                    RESERVE AND SURFACES
 //------------------------------------------------------------------------------------------------------------------------
 
-bool SceneGeometryOccupancy::AcquireReserve(uint32_t FacetSet, uint32_t& OutOccupant)
+bool SceneSubjectPlacement::AcquireReserve(uint32_t FacetSet, uint32_t& OutOccupant)
 {
     if (ReserveFree_.empty()) return false;
     // 📝 A free occupant already showing the shape needs no new cards; else the most recently freed one.
@@ -329,7 +329,7 @@ bool SceneGeometryOccupancy::AcquireReserve(uint32_t FacetSet, uint32_t& OutOccu
     return true;
 }
 
-uint32_t SceneGeometryOccupancy::ResolveParticipation(const Frontier::GlobalIllumination::OccupantEntry& Base,
+uint32_t SceneSubjectPlacement::ResolveParticipation(const Frontier::GlobalIllumination::OccupantEntry& Base,
                                                       const Frontier::GeometryConfiguration& Configuration) const
 {
     using namespace Frontier::GlobalIllumination;
@@ -342,7 +342,7 @@ uint32_t SceneGeometryOccupancy::ResolveParticipation(const Frontier::GlobalIllu
     return Mask;
 }
 
-int32_t SceneGeometryOccupancy::ResolveOverride(const Frontier::GlobalIllumination::OccupantEntry& Base, const Occupancy& Entry) const
+int32_t SceneSubjectPlacement::ResolveOverride(const Frontier::GlobalIllumination::OccupantEntry& Base, const PlacementState& Entry) const
 {
     using namespace Frontier::GlobalIllumination;
     if (Entry.Block < 0) return Base.MaterialOverride;
@@ -352,7 +352,7 @@ int32_t SceneGeometryOccupancy::ResolveOverride(const Frontier::GlobalIlluminati
     return static_cast<int32_t>(MaterialBlockBit | BlockBase);
 }
 
-void SceneGeometryOccupancy::Release(Occupancy& Entry, std::vector<Frontier::GlobalIllumination::OccupantPlacement>& Placements)
+void SceneSubjectPlacement::Release(PlacementState& Entry, std::vector<Frontier::GlobalIllumination::SubjectPlacement>& Placements)
 {
     for (auto& Part : Entry.Reserve)
     {
@@ -372,8 +372,8 @@ void SceneGeometryOccupancy::Release(Occupancy& Entry, std::vector<Frontier::Glo
 //                                                    RESOLUTION
 //------------------------------------------------------------------------------------------------------------------------
 
-void SceneGeometryOccupancy::Resolve(Occupancy& Entry, const Frontier::GeometryConfiguration& Configuration,
-                                     std::vector<Frontier::GlobalIllumination::OccupantPlacement>& Placements)
+void SceneSubjectPlacement::Resolve(PlacementState& Entry, const Frontier::GeometryConfiguration& Configuration,
+                                     std::vector<Frontier::GlobalIllumination::SubjectPlacement>& Placements)
 {
     using namespace Frontier;
     using namespace Frontier::GlobalIllumination;
@@ -477,7 +477,7 @@ void SceneGeometryOccupancy::Resolve(Occupancy& Entry, const Frontier::GeometryC
     //    template's shape when it shows another
     GlobalIllumination::WorldBounds Bounds{{1.0e30, 1.0e30, 1.0e30}, {-1.0e30, -1.0e30, -1.0e30}};
     auto Emit = [&](uint32_t Occupant, const OccupantEntry& Base, const PlacementMatrix& Placement, bool Active, bool Reserve, size_t Part) {
-        OccupantPlacement Entrant{Occupant, Placement, Active};
+        SubjectPlacement Entrant{Occupant, Placement, Active};
         Entrant.Participation    = ResolveParticipation(Base, Configuration);
         Entrant.MaterialOverride = ResolveOverride(Base, Entry);
         Entrant.Recapture        = Resurfaced;
@@ -535,19 +535,19 @@ void SceneGeometryOccupancy::Resolve(Occupancy& Entry, const Frontier::GeometryC
     }
 }
 
-std::vector<Frontier::GlobalIllumination::OccupantPlacement> SceneGeometryOccupancy::ResolvePlacements(const Frontier::WorldSpace& World)
+std::vector<Frontier::GlobalIllumination::SubjectPlacement> SceneSubjectPlacement::ResolvePlacements(const Frontier::WorldSpace& World)
 {
-    std::vector<Frontier::GlobalIllumination::OccupantPlacement> Placements;
+    std::vector<Frontier::GlobalIllumination::SubjectPlacement> Placements;
     if (Scene_ == nullptr) return Placements;
     bool Changed = false;
-    for (auto& [Token, Entry] : Occupancies_) Entry.Present = false;
+    for (auto& [Token, Entry] : PlacementStates_) Entry.Present = false;
     const auto Records = World.FindAllByType("Geometry");
     for (const Frontier::SceneRecordBase* Record : Records)
     {
         const auto* Geometry = dynamic_cast<const Frontier::GeometryRecord*>(Record);
         if (Geometry == nullptr) continue;
         const Frontier::GeometryConfiguration& Configuration = Geometry->QueryConfiguration();
-        Occupancy&                             Entry         = Occupancies_[Record->QueryToken().Value];
+        PlacementState&                             Entry         = PlacementStates_[Record->QueryToken().Value];
         Entry.Present = true;
         if (const std::string Signature = ComposeSignature(Configuration); Signature != Entry.Signature)
         {
@@ -561,7 +561,7 @@ std::vector<Frontier::GlobalIllumination::OccupantPlacement> SceneGeometryOccupa
         Changed = true;
     }
     // 📝 A record that left the level hands back its reserve occupants and its material block; its archive occupants are unclaimed.
-    for (auto Cursor = Occupancies_.begin(); Cursor != Occupancies_.end();)
+    for (auto Cursor = PlacementStates_.begin(); Cursor != PlacementStates_.end();)
     {
         if (Cursor->second.Present)
         {
@@ -569,13 +569,13 @@ std::vector<Frontier::GlobalIllumination::OccupantPlacement> SceneGeometryOccupa
             continue;
         }
         Release(Cursor->second, Placements);
-        Cursor  = Occupancies_.erase(Cursor);
+        Cursor  = PlacementStates_.erase(Cursor);
         Changed = true;
     }
     // 📝 The archive occupants nobody claims: hidden while the level holds Geometry records (a removed object stays removed), at the
     //    archive's placements once it holds none.
     std::vector<uint8_t> Claimed(Entries_.size(), 0u);
-    for (const auto& [Token, Entry] : Occupancies_)
+    for (const auto& [Token, Entry] : PlacementStates_)
         for (const auto& Part : Entry.Claimed)
             for (const uint32_t Occupant : Part) Claimed[Occupant] = 1u;
     // 📝 Hidden_ holds what an occupant was last handed: 0 the archive's placement, 1 hidden, 2 a claiming record's placement.
@@ -593,11 +593,11 @@ std::vector<Frontier::GlobalIllumination::OccupantPlacement> SceneGeometryOccupa
     if (Changed)
     {
         std::unordered_map<uint32_t, uint32_t> Users;
-        for (const auto& [Token, Entry] : Occupancies_)
+        for (const auto& [Token, Entry] : PlacementStates_)
             if (Entry.Block < 0)
                 for (const uint32_t Family : Entry.Resolution.Families) ++Users[Family];
         auto Snapshot = std::make_shared<GeometryResolutions>();
-        for (const auto& [Token, Entry] : Occupancies_)
+        for (const auto& [Token, Entry] : PlacementStates_)
         {
             Frontier::GeometryConfiguration::Resolution Resolution = Entry.Resolution;
             for (const uint32_t Family : Resolution.Families) Resolution.FamilyUsers.push_back(Entry.Block >= 0 ? 1u : Users[Family]);
@@ -606,7 +606,7 @@ std::vector<Frontier::GlobalIllumination::OccupantPlacement> SceneGeometryOccupa
         }
         Snapshot_ = std::move(Snapshot);
         Owners_.clear();
-        for (const auto& [Token, Entry] : Occupancies_)
+        for (const auto& [Token, Entry] : PlacementStates_)
             for (const ShownOccupant& Shown : Entry.Shown) Owners_[Shown.Occupant] = Token;
         ++Generation_;
     }

@@ -373,9 +373,9 @@ std::array<uint32_t, 2> SceneViewport::QueryScreenExtent() const noexcept
     return Host_ ? Host_->ScreenExtent : std::array<uint32_t, 2>{0, 0};
 }
 
-uint32_t SceneViewport::RelocateOccupants(const std::vector<OccupantPlacement>& Placements)
+uint32_t SceneViewport::RelocateSubjects(const std::vector<SubjectPlacement>& Placements)
 {
-    return Host_ ? GlobalIllumination::RelocateOccupants(*Host_, Placements) : 0u;
+    return Host_ ? GlobalIllumination::RelocateSubjects(*Host_, Placements) : 0u;
 }
 
 Transform SceneViewport::ResolveViewProjection(const ViewportCamera& Camera, std::array<uint32_t, 2> ScreenExtent) noexcept
@@ -385,7 +385,7 @@ Transform SceneViewport::ResolveViewProjection(const ViewportCamera& Camera, std
                              ConstructViewTransform(Camera.Position, Camera.Target, Camera.Up));
 }
 
-bool SceneViewport::PickOccupants(std::array<double, 2> Point, OccupantPick& Outcome, std::string* OutDiagnostic)
+bool SceneViewport::PickSubjects(std::array<double, 2> Point, SubjectPick& Outcome, std::string* OutDiagnostic)
 {
     if (!PickCamera_ || PickExtent_[0] == 0 || PickExtent_[1] == 0)
     {
@@ -399,11 +399,11 @@ bool SceneViewport::PickOccupants(std::array<double, 2> Point, OccupantPick& Out
         const double Scaled = std::floor(std::clamp(Point[Axis], 0.0, 1.0) * PickExtent_[Axis]);
         Pixel[Axis]         = static_cast<uint32_t>(std::min(Scaled, static_cast<double>(PickExtent_[Axis] - 1u)));
     }
-    return PickOccupants(*PickCamera_, PickExtent_, Pixel, Outcome, OutDiagnostic);
+    return PickSubjects(*PickCamera_, PickExtent_, Pixel, Outcome, OutDiagnostic);
 }
 
-bool SceneViewport::PickOccupants(const ViewportCamera& Camera, std::array<uint32_t, 2> ScreenExtent, std::array<uint32_t, 2> Pixel,
-                                  OccupantPick& Outcome, std::string* OutDiagnostic)
+bool SceneViewport::PickSubjects(const ViewportCamera& Camera, std::array<uint32_t, 2> ScreenExtent, std::array<uint32_t, 2> Pixel,
+                                  SubjectPick& Outcome, std::string* OutDiagnostic)
 {
     if (!Host_ || !Host_->VertexRegion || !Host_->OccupantRegion)
     {

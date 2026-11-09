@@ -1,4 +1,4 @@
-"""EditorInterface (Particle Studio) standalone preview server on 0.0.0.0:8083."""
+"""ParticleEditor (Particle Studio) standalone preview server on 0.0.0.0:8083."""
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import os
@@ -11,7 +11,7 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path in ('/', '/index.html'):
             self.send_response(302)
-            self.send_header('Location', '/Experimental%20Remastered/EditorInterface/')
+            self.send_header('Location', '/Experimental%20Remastered/ParticleEditor/')
             self.end_headers()
             return
         super().do_GET()

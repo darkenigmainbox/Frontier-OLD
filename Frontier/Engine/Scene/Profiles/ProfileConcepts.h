@@ -31,6 +31,10 @@ concept HasSpatialProfile = requires(T Instance, const T ConstInstance) {
     { ConstInstance.Spatial } -> std::same_as<const SpatialProfile&>;
 };
 
+// A viewport transform gizmo can edit any record that directly carries the shared SpatialProfile.
+template <typename T>
+concept SpatialEditable = HasSpatialProfile<T>;
+
 template <typename T>
 concept HasMassProfile = requires(T Instance, const T ConstInstance) {
     { Instance.Mass } -> std::same_as<MassProfile&>;

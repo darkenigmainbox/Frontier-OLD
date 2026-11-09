@@ -1,10 +1,10 @@
 /*==========================================================================================================================================
-                                                          OCCUPANTRELOCATION.CPP
+                                                          SUBJECTRELOCATION.CPP
 ==========================================================================================================================================*/
 // 🧩 Editor placements of the scene's occupants, beyond the demo: the level's geometry objects move, hide and re-lay the
 //    proving ground's static occupants between refreshes, and every step that reads an occupant follows.
 
-#include "OccupantRelocation.h"
+#include "SubjectRelocation.h"
 
 #include "IlluminationHost.h"
 
@@ -17,7 +17,7 @@ namespace Frontier::GlobalIllumination
 //                                                    RELOCATION
 //------------------------------------------------------------------------------------------------------------------------
 
-uint32_t RelocateOccupants(IlluminationHost& Host, const std::vector<OccupantPlacement>& Placements)
+uint32_t RelocateSubjects(IlluminationHost& Host, const std::vector<SubjectPlacement>& Placements)
 {
     SceneStructure&          Scene = Host.Scene;
     std::vector<WorldBounds> Invalidated;
@@ -32,17 +32,17 @@ uint32_t RelocateOccupants(IlluminationHost& Host, const std::vector<OccupantPla
         if (std::find(Host.RelocatedOccupants.begin(), Host.RelocatedOccupants.end(), Index) == Host.RelocatedOccupants.end())
             Host.RelocatedOccupants.push_back(Index);
     };
-    for (const OccupantPlacement& Placement : Placements)
+    for (const SubjectPlacement& Placement : Placements)
     {
-        if (Placement.Occupant >= Scene.Occupants.size()) continue;
-        OccupantEntry& Occupant = Scene.Occupants[Placement.Occupant];
+        if (Placement.SubjectIndex >= Scene.Occupants.size()) continue;
+        OccupantEntry& Occupant = Scene.Occupants[Placement.SubjectIndex];
         // 📝 A reserve occupant takes its template's shape while it is still hidden, so nothing it was drawn as lingers.
         bool Reassigned = false;
         if (Placement.Template && Placement.Template->FacetSet != Occupant.FacetSet)
         {
             if (!Occupant.Inactive && (Occupant.Participation & OccupantParticipation::Distance))
-                Invalidated.push_back(Scene.QueryWorldBounds(Placement.Occupant));
-            Reassigned = Host.AssignReserveOccupant(Placement.Occupant, *Placement.Template);
+                Invalidated.push_back(Scene.QueryWorldBounds(Placement.SubjectIndex));
+            Reassigned = Host.AssignReserveOccupant(Placement.SubjectIndex, *Placement.Template);
             ActivityChanged = ActivityChanged || Reassigned;
         }
         const bool Inactive        = !Placement.Active;
@@ -53,25 +53,25 @@ uint32_t RelocateOccupants(IlluminationHost& Host, const std::vector<OccupantPla
         ++Changed;
         // 📝 The distance field holds the occupant where it was unioned: both the old and the new bounds are rebuilt.
         const bool Unioned = (Occupant.Participation & OccupantParticipation::Distance) != 0;
-        if (Unioned && !Occupant.Inactive) Invalidated.push_back(Scene.QueryWorldBounds(Placement.Occupant));
+        if (Unioned && !Occupant.Inactive) Invalidated.push_back(Scene.QueryWorldBounds(Placement.SubjectIndex));
         if (Relocated)
         {
-            const bool Pending = std::find(Host.RelocatedOccupants.begin(), Host.RelocatedOccupants.end(), Placement.Occupant) !=
+            const bool Pending = std::find(Host.RelocatedOccupants.begin(), Host.RelocatedOccupants.end(), Placement.SubjectIndex) !=
                                  Host.RelocatedOccupants.end();
             if (!Pending)
             {
                 Occupant.Previous = Occupant.Current;
-                Host.RelocatedOccupants.push_back(Placement.Occupant);
+                Host.RelocatedOccupants.push_back(Placement.SubjectIndex);
             }
             Occupant.Current = Placement.Current;
             if (Occupant.UnionTransform) Occupant.UnionTransform = Placement.Current;
-            Moved.push_back(Placement.Occupant);
+            Moved.push_back(Placement.SubjectIndex);
         }
         if (Occupant.Inactive != Inactive)
         {
             Occupant.Inactive = Inactive;
             ActivityChanged   = true;
-            MarkRelocated(Placement.Occupant);
+            MarkRelocated(Placement.SubjectIndex);
             // 📝 An occupant shown again was idle: it arrives where it is placed, without a motion trail.
             if (!Inactive) Occupant.Previous = Occupant.Current;
         }
@@ -81,16 +81,16 @@ uint32_t RelocateOccupants(IlluminationHost& Host, const std::vector<OccupantPla
             Occupant.Participation = *Placement.Participation;
             ShadowsChanged = ShadowsChanged || (Toggled & OccupantParticipation::ShadowExempt) != 0;
             TilesChanged   = TilesChanged || (Toggled & OccupantParticipation::Dynamic) != 0;
-            MarkRelocated(Placement.Occupant);
+            MarkRelocated(Placement.SubjectIndex);
         }
         if (Resurfaced)
         {
             Occupant.MaterialOverride = *Placement.MaterialOverride;
-            MarkRelocated(Placement.Occupant);
+            MarkRelocated(Placement.SubjectIndex);
         }
-        if ((Resurfaced || Placement.Recapture) && !Reassigned) Recaptured.push_back(Placement.Occupant);
+        if ((Resurfaced || Placement.Recapture) && !Reassigned) Recaptured.push_back(Placement.SubjectIndex);
         const bool UnionedNow = (Occupant.Participation & OccupantParticipation::Distance) != 0;
-        if (UnionedNow && !Occupant.Inactive) Invalidated.push_back(Scene.QueryWorldBounds(Placement.Occupant));
+        if (UnionedNow && !Occupant.Inactive) Invalidated.push_back(Scene.QueryWorldBounds(Placement.SubjectIndex));
         LampsChanged = LampsChanged || Occupant.Name.rfind("Light pole head ", 0) == 0 || Occupant.Name.rfind("Point lamp lantern ", 0) == 0;
     }
     if (Changed == 0) return 0;

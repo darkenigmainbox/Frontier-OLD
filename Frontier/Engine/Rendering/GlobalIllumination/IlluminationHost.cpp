@@ -110,7 +110,7 @@ bool IlluminationHost::Construct(const IlluminationAssets& Assets, const Illumin
          "distance volumes");
 
     // ② per-occupant distance volumes
-    Volumes = std::make_unique<OccupantDistanceSpace>(Exchange, Shaders);
+    Volumes = std::make_unique<SubjectDistanceSpace>(Exchange, Shaders);
     if (!Volumes->ConstructVolumes(Scene, Grade.VoxelScale, OutDiagnostic)) return false;
     Step("② distance volumes: " + std::to_string(Volumes->Volumes.size()) + " in " + std::to_string(Volumes->SpaceExtent[0]) + "x" +
              std::to_string(Volumes->SpaceExtent[1]) + "x" + std::to_string(Volumes->SpaceExtent[2]) + " texels",
@@ -292,7 +292,7 @@ void IlluminationHost::ResolveLampPlacements()
 
 void IlluminationHost::SettleRelocatedOccupants()
 {
-    // 📝 Beyond the demo (OccupantRelocation): one profile write per occupant, after this refresh's dynamic profiles.
+    // 📝 Beyond the demo (SubjectRelocation): one profile write per occupant, after this refresh's dynamic profiles.
     auto WriteProfile = [this](uint32_t Index) {
         if (Index >= Scene.Occupants.size()) return;
         const std::vector<uint8_t> Profile = Scene.EncodeOccupantRange(&Volumes->Volumes, Index, 1u);

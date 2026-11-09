@@ -1,5 +1,5 @@
 /*==========================================================================================================================================
-                                                           OCCUPANTRELOCATION.H
+                                                           SUBJECTRELOCATION.H
 ==========================================================================================================================================*/
 // 🧩 Editor placements of the scene's occupants, beyond the demo: the level's geometry objects move, hide and re-lay the
 //    proving ground's static occupants between refreshes, and every step that reads an occupant follows.
@@ -23,9 +23,9 @@ class IlluminationHost;
 
 // 📝 One occupant as the editor places it: its world transform, and whether it takes part (drawn, traced, unioned, lit). The
 //    optional fields leave the occupant as it is when unset.
-struct OccupantPlacement
+struct SubjectPlacement
 {
-    uint32_t  Occupant = 0;
+    uint32_t  SubjectIndex = 0;
     Transform Current{};
     bool      Active   = true;
     std::optional<uint32_t>      Participation{};      // [-] OccupantParticipation mask (Dynamic, ShadowExempt, IndirectExempt)
@@ -44,6 +44,6 @@ struct OccupantPlacement
 //    bounds; the moved occupants' cards relight first; the lamps follow their heads and lanterns. A template reassigns a reserve
 //    occupant first; a changed participation rebuilds the shadow runs (ShadowExempt), the tile lists (Dynamic) or the field
 //    (IndirectExempt); a changed surface captures the cards again.
-uint32_t RelocateOccupants(IlluminationHost& Host, const std::vector<OccupantPlacement>& Placements);
+uint32_t RelocateSubjects(IlluminationHost& Host, const std::vector<SubjectPlacement>& Placements);
 
 } // namespace Frontier::GlobalIllumination

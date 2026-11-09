@@ -10,7 +10,7 @@ add_library(FrontierGlobalIllumination STATIC
     Frontier/Engine/Rendering/GlobalIllumination/SceneStructure.cpp
     Frontier/Engine/Rendering/GlobalIllumination/BoundingStructure.cpp
     Frontier/Engine/Rendering/GlobalIllumination/ShaderInterchange.cpp
-    Frontier/Engine/Rendering/GlobalIllumination/OccupantDistanceSpace.cpp
+    Frontier/Engine/Rendering/GlobalIllumination/SubjectDistanceSpace.cpp
     Frontier/Engine/Rendering/GlobalIllumination/IlluminationConstants.cpp
     Frontier/Engine/Rendering/GlobalIllumination/SceneDistanceSpace.cpp
     Frontier/Engine/Rendering/GlobalIllumination/SurfaceCardDepot.cpp
@@ -24,7 +24,7 @@ add_library(FrontierGlobalIllumination STATIC
     Frontier/Engine/Rendering/GlobalIllumination/EnvironmentEncoding.cpp
     Frontier/Engine/Rendering/GlobalIllumination/LuminaireRegister.cpp
     Frontier/Engine/Rendering/GlobalIllumination/IlluminationHost.cpp
-    Frontier/Engine/Rendering/GlobalIllumination/OccupantRelocation.cpp
+    Frontier/Engine/Rendering/GlobalIllumination/SubjectRelocation.cpp
     Frontier/Engine/Rendering/GlobalIllumination/PickProjection.cpp
     Frontier/Engine/Rendering/VirtualizedGeometry/NestingProjection.cpp)
 

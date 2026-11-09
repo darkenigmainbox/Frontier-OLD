@@ -8,7 +8,7 @@
 
 #include "EnvironmentOverlay.h"
 #include "Rendering/DirectShading/DirectShadingSequence.h"
-#include "Rendering/GlobalIllumination/OccupantRelocation.h"
+#include "Rendering/GlobalIllumination/SubjectRelocation.h"
 #include "Rendering/GlobalIllumination/PickProjection.h"
 
 #include <array>
@@ -127,15 +127,15 @@ class SceneViewport
     EnvironmentSettings Sky{};
     // 🔍 Last word on the refresh toggles before each refresh (validation tools switch the demo's options and the refinements).
     std::function<void(RefreshToggles&)> ToggleAdjustment{};
-    // 📝 Beyond the demo: the editor's placements of the proving ground's occupants (OccupantRelocation), applied before the next
+    // 📝 Beyond the demo: the editor's placements of the proving ground's occupants (SubjectRelocation), applied before the next
     //    refresh; returns how many occupants changed. A rebuilt viewport starts from the archive again.
-    uint32_t RelocateOccupants(const std::vector<OccupantPlacement>& Placements);
+    uint32_t RelocateSubjects(const std::vector<SubjectPlacement>& Placements);
     // 📝 Beyond the demo: GPU picking (PickProjection). The occupants drawn at and around a point of the last refreshed image (a
     //    fraction of its width and height from the top-left), seen through that refresh's camera, unjittered, with the occupants
     //    where that refresh drew them; false while nothing has been refreshed or when the pick program is unavailable.
-    bool PickOccupants(std::array<double, 2> Point, OccupantPick& Outcome, std::string* OutDiagnostic = nullptr);
+    bool PickSubjects(std::array<double, 2> Point, SubjectPick& Outcome, std::string* OutDiagnostic = nullptr);
     // 📝 The same for a pixel of an image of ScreenExtent pixels seen through Camera (validation, no refresh needed).
-    bool PickOccupants(const ViewportCamera& Camera, std::array<uint32_t, 2> ScreenExtent, std::array<uint32_t, 2> Pixel, OccupantPick& Outcome,
+    bool PickSubjects(const ViewportCamera& Camera, std::array<uint32_t, 2> ScreenExtent, std::array<uint32_t, 2> Pixel, SubjectPick& Outcome,
                        std::string* OutDiagnostic = nullptr);
     // 📝 The unjittered view-projection the refresh encodes for Camera at ScreenExtent (RefreshEncoder, DirectShadingSequence).
     [[nodiscard]] static Transform ResolveViewProjection(const ViewportCamera& Camera, std::array<uint32_t, 2> ScreenExtent) noexcept;
