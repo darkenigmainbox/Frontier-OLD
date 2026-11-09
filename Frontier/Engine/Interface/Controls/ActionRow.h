@@ -58,9 +58,11 @@ struct ActionRowLook
 class ActionRow
 {
   public:
-    // 📝 Returns the clicked action index, or -1 when nothing fired this frame.
+    // 📝 Returns the clicked action index, or -1 when nothing fired this frame. OutRects, when given, receives one
+    //    screen rect per action so shells can expose scripted hit rects.
     [[nodiscard]] static int Construct(ControlColumn& Column, const char* Id, const ActionItem* Actions, int Count, bool Enabled = true,
-                                       const char* Tooltip = nullptr, ActionRowVoice Voice = ActionRowVoice::Charcoal);
+                                       const char* Tooltip = nullptr, ActionRowVoice Voice = ActionRowVoice::Charcoal,
+                                       ImVec4* OutRects = nullptr);
     static int Construct(ControlColumn& Column, std::span<const ActionEntry> Entries, const ActionRowLook& Look = {});
 };
 

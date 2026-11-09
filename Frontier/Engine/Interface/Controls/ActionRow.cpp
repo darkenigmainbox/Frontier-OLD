@@ -24,7 +24,7 @@ namespace Frontier
 //------------------------------------------------------------------------------------------------------------------------
 
 int ActionRow::Construct(ControlColumn& Column, const char* Id, const ActionItem* Actions, int Count, bool Enabled, const char* Tooltip,
-                        ActionRowVoice Voice)
+                        ActionRowVoice Voice, ImVec4* OutRects)
 {
     const EditorTypefaces& Faces    = Column.QueryFaces();
     ImDrawList* const      DrawList = Column.QueryDrawList();
@@ -48,6 +48,7 @@ int ActionRow::Construct(ControlColumn& Column, const char* Id, const ActionItem
         const float       ItemFade = Fade * (Action.Enabled ? 1.0f : 0.42f);
         const ImVec2      Min(Top.x + Index * (Wide + Gap * S), Top.y);
         const ImVec2      Max(Min.x + Wide, Min.y + ButtonTall * S);
+        if (OutRects != nullptr) OutRects[Index] = ImVec4(Min.x, Min.y, Max.x, Max.y);
         ImGui::SetCursorScreenPos(Min);
         ImGui::PushID(Index);
         if (ImGui::InvisibleButton("##Action", ImVec2(Wide, ButtonTall * S), ImGuiButtonFlags_EnableNav) && Enabled && Action.Enabled)
