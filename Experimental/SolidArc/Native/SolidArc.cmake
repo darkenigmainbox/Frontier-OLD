@@ -689,6 +689,19 @@ set_tests_properties(SolidArcShortcutWalkthrough PROPERTIES SKIP_RETURN_CODE 77)
 set_tests_properties(SolidArcVariableBlendWalkthrough PROPERTIES SKIP_RETURN_CODE 77)
 set_tests_properties(SolidArcWorkspaceWalkthrough PROPERTIES SKIP_RETURN_CODE 77 FIXTURES_SETUP SolidArcAutosave)
 set_tests_properties(SolidArcRecoveryWalkthrough PROPERTIES SKIP_RETURN_CODE 77 FIXTURES_REQUIRED SolidArcAutosave)
+# 📝 GPU-gated walkthroughs: SolidArcCapture exits 77 without a Vulkan device, which ctest reports as
+#    Skipped rather than Failed (same convention as the walkthroughs above).
+set_tests_properties(SolidArcFillWalkthrough PROPERTIES SKIP_RETURN_CODE 77)
+set_tests_properties(SolidArcFilletDragWalkthrough PROPERTIES SKIP_RETURN_CODE 77)
+set_tests_properties(SolidArcOrientWalkthrough PROPERTIES SKIP_RETURN_CODE 77)
+set_tests_properties(SolidArcExtrudeManifoldWalkthrough PROPERTIES SKIP_RETURN_CODE 77)
+set_tests_properties(SolidArcExtrudeAxisWalkthrough PROPERTIES SKIP_RETURN_CODE 77)
+set_tests_properties(SolidArcEdgePathWalkthrough PROPERTIES SKIP_RETURN_CODE 77)
+set_tests_properties(SolidArcWrapWalkthrough PROPERTIES SKIP_RETURN_CODE 77)
+set_tests_properties(SolidArcImprintWalkthrough PROPERTIES SKIP_RETURN_CODE 77)
+set_tests_properties(SolidArcResponsivenessWalkthrough PROPERTIES SKIP_RETURN_CODE 77)
+set_tests_properties(SolidArcEdgeStrokeWalkthrough PROPERTIES SKIP_RETURN_CODE 77)
+set_tests_properties(SolidArcRevolveSweepWalkthrough PROPERTIES SKIP_RETURN_CODE 77)
 
 include("${SOLIDARC_EXHIBIT}/Integration/Validation.cmake")
 
