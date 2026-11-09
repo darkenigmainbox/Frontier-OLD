@@ -4,6 +4,7 @@
 // 🧩 Bring-up of every illumination stage in the demo's order, then the refresh: invalidate, relight, gather, resolve, present.
 
 #include "IlluminationHost.h"
+#include "Frontier/Engine/Foundation/Constants.h"
 
 #include <algorithm>
 #include <chrono>
@@ -20,7 +21,7 @@ namespace
 constexpr uint32_t RefreshConstantsBytes = 1072;    // [B] RefreshConstants (268 floats)
 constexpr uint32_t VehicleProfileBytes   = 10448;   // [B] VehicleProfile
 constexpr uint32_t EffectProfileBytes    = 1120;    // [B] EffectProfile
-constexpr double   Pi                    = 3.141592653589793;
+constexpr double   Pi                    = MathConstantsD::Pi;
 
 // 📝 The demo's EnvironmentSettings is one object: the keys AtmosphereIntegrator reads mirror the environment's own.
 void SynchronizeAtmosphere(EnvironmentSettings& Environment)

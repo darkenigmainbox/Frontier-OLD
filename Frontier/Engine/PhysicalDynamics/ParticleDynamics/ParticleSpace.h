@@ -6,8 +6,13 @@
 
 #pragma once
 
+#include "Engine/PhysicalDynamics/IFieldSampler.h"
 #include "Frontier/Engine/PhysicalDynamics/ParticleDynamics/ParticleLightning.h"
+#include "Frontier/Engine/PhysicalDynamics/ParticleDynamics/ParticleTriggerRouter.h"
 #include "Frontier/Engine/PhysicalDynamics/ParticleDynamics/ParticleUniformPacking.h"
+#include "Frontier/Engine/Scene/Profiles/MassProfile.h"
+#include "Frontier/Engine/Scene/Profiles/ReplicationProfile.h"
+#include "Frontier/Engine/Scene/Profiles/SpatialProfile.h"
 
 #include <array>
 #include <cstdint>
@@ -15,6 +20,14 @@
 #include <string>
 #include <string_view>
 #include <vector>
+
+namespace toml
+{
+inline namespace v3
+{
+class table;
+}
+} // namespace toml
 
 namespace Frontier
 {
@@ -40,6 +53,12 @@ struct ParticleEffectInstance
     uint32_t                             Head         = 0;     // ring position of the next release
     std::optional<double>                BurstTimerSeconds;
     uint64_t                             StoreGeneration = 0;  // a new generation asks the GPU for fresh stores
+
+    // 📝 Composable profiles: world placement (z up), a representative medium mass for coupled physics exchange, and the
+    //    per-effect network replication gate. Live revisions are not stored by the codec.
+    SpatialProfile     Spatial;
+    MassProfile        Mass;
+    ReplicationProfile Replication;
 };
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -122,6 +141,10 @@ public:
     //    scene when Presets is empty).
     void ConstructDefault(const ParticleEffectLibrary& Library, const std::vector<std::string>* Presets = nullptr);
 
+    // 📝 Level force-field coupling: samples the level's IFieldSampler at the level-wind anchor (world axes, z up) and
+    //    stores the flow as the level wind (domain axes, y up), so a Particles record follows the level's ForceField.
+    void SampleLevelForceField(const IFieldSampler& Field);
+
     ParticleEffectInstance* AddEffect(const ParticleEffectLibrary& Library, std::string_view PresetIdentifier);
     ParticleEffectInstance* DuplicateEffect(const ParticleEffectLibrary& Library, std::string_view Token);
     bool                    RemoveEffect(std::string_view Token);
@@ -157,6 +180,26 @@ public:
     std::string                         Selected     = "Field";
     uint32_t                            NextNumber   = 1;
 
+    // 📝 Domain profiles (world axes, z up) and the authored trigger rules persisted with the space.
+    SpatialProfile                   Spatial;
+    MassProfile                      Mass;
+    ReplicationProfile               Replication;
+    std::vector<ParticleTriggerRule> TriggerRules;
+
+    // 📝 ReplicableDomainConcept contract for DomainReplicator<ParticleSpace>.
+    [[nodiscard]] std::string_view QueryDomainIdentifier() const noexcept { return DomainId; }
+    void                           ConfigureDomainIdentifier(std::string Id) { DomainId = std::move(Id); }
+    [[nodiscard]] uint64_t         QueryDomainRevision() const noexcept { return Revision; }
+    void                           AdvanceRevision() noexcept { ++Revision; }
+    [[nodiscard]] SpatialProfile&           AccessSpatialProfile() noexcept { return Spatial; }
+    [[nodiscard]] const SpatialProfile&     QuerySpatialProfile() const noexcept { return Spatial; }
+    [[nodiscard]] MassProfile&              AccessMassProfile() noexcept { return Mass; }
+    [[nodiscard]] const MassProfile&        QueryMassProfile() const noexcept { return Mass; }
+    [[nodiscard]] ReplicationProfile&       AccessReplicationProfile() noexcept { return Replication; }
+    [[nodiscard]] const ReplicationProfile& QueryReplicationProfile() const noexcept { return Replication; }
+    void                                   SerializeDomainState(toml::table& Out) const;
+    void                                   DeserializeDomainState(const toml::table& In);
+
 private:
     void   ApplyWindLink(const ParticlePreset& Preset);
     void   ReceiveStrike(const std::array<double, 3>& Point);
@@ -170,6 +213,8 @@ private:
     };
     std::vector<FibrePathKey> FibrePaths;
     uint32_t                  RandomCounter = 0;
+    uint64_t                  Revision      = 0;   // 📝 bumped by trigger dispatches and field sampling
+    std::string               DomainId      = "particles";
 };
 
 } // namespace Frontier

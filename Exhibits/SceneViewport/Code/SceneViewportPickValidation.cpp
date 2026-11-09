@@ -273,7 +273,7 @@ int main(int ArgumentCount, char** Arguments)
         if (Pipeline == nullptr) throw std::runtime_error("no Render settings record");
         Pipeline->AccessConfiguration().QualityTier          = 0;
         Pipeline->AccessConfiguration().HardwareRayQueryTier = false;
-        Pipeline->AccessConfiguration().AnalyticIllumination = true;
+        Pipeline->AccessConfiguration().DirectShading        = true;
         Pipeline->AccessConfiguration().AdvanceRevision();
         // 📝 A 4 m engine torus lying on open ground: its bounding box covers its 1.6 m hole.
         const Frontier::RecordToken TorusToken = World.ConstructRecord("Geometry", "Torus");

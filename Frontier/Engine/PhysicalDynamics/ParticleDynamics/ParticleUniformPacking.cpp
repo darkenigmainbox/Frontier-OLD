@@ -4,10 +4,10 @@
 // 🧩 eos fillSys, fillFibre and samplePath, and the prototype's camera, field and lensing packing, in C++.
 
 #include "Frontier/Engine/PhysicalDynamics/ParticleDynamics/ParticleUniformPacking.h"
+#include "Frontier/Engine/Foundation/Constants.h"
 
 #include <algorithm>
 #include <cmath>
-#include <numbers>
 
 namespace Frontier
 {
@@ -321,7 +321,7 @@ ParticleCameraReading ResolveParticleCamera(const ParticleOrbitCamera& Camera, d
     };
     const double Near   = 0.05;
     const double Far    = 400.0;
-    const double Focal  = 1.0 / std::tan(((45.0 * std::numbers::pi) / 180.0) / 2.0);
+    const double Focal  = 1.0 / std::tan(DegreesToRadians(45.0) * 0.5);
     const std::array<float, 16> Projection = {
         static_cast<float>(Focal / Aspect), 0.0f, 0.0f, 0.0f,
         0.0f, static_cast<float>(Focal), 0.0f, 0.0f,
@@ -374,7 +374,7 @@ void PackParticleWindComponents(ParticleWindComponents& Out, std::span<const Par
         const ParticleLatticeComponent& Component = Lattice[Index];
         const uint32_t                  Offset    = static_cast<uint32_t>(Index) * 8u;
         PutAt(Out, Offset, Component.X, Component.Z, std::max(0.5, Component.Radius), static_cast<double>(Component.Slot));
-        PutAt(Out, Offset + 4, Component.Strength, (Component.BearingDegrees * std::numbers::pi) / 180.0, Component.Rate,
+        PutAt(Out, Offset + 4, Component.Strength, DegreesToRadians(Component.BearingDegrees), Component.Rate,
               Component.Enabled ? 1.0 : 0.0);
     }
 }

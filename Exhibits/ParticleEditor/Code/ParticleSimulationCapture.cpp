@@ -53,7 +53,7 @@ int main(int ArgumentCount, char** Arguments)
 
     ParticleEffectLibrary Library;
     std::string           Diagnostic;
-    if (!Library.Decode(Root / "EngineContent/ParticleArchives/ParticleLibrary.toml", Diagnostic))
+    if (!Library.Decode(Root / "EngineContent/ParticleArchives/ParticleLibrary.particlespace", Diagnostic))
     {
         std::fprintf(stderr, "🔴 library: %s\n", Diagnostic.c_str());
         return 1;

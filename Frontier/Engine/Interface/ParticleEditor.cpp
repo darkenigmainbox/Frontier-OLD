@@ -30,11 +30,15 @@ namespace
 //    Windows' Open with starts in the document's folder.
 std::filesystem::path ResolveLibraryFile()
 {
-    const std::filesystem::path Relative = std::filesystem::path("ParticleArchives") / "ParticleLibrary.toml";
+    const std::filesystem::path Primary  = std::filesystem::path("ParticleArchives") / "ParticleLibrary.particlespace";
+    const std::filesystem::path Fallback = std::filesystem::path("ParticleArchives") / "ParticleLibrary.toml";
     const std::filesystem::path Engine   = QueryEngineContentDirectory();
     std::error_code             Failure;
-    if (!Engine.empty() && std::filesystem::is_regular_file(Engine / Relative, Failure)) return Engine / Relative;
-    return ResolveContentDirectory("EngineContent") / Relative;
+    if (!Engine.empty() && std::filesystem::is_regular_file(Engine / Primary, Failure)) return Engine / Primary;
+    if (!Engine.empty() && std::filesystem::is_regular_file(Engine / Fallback, Failure)) return Engine / Fallback;
+    const std::filesystem::path ResolvedPrimary = ResolveContentDirectory("EngineContent") / Primary;
+    if (std::filesystem::is_regular_file(ResolvedPrimary, Failure)) return ResolvedPrimary;
+    return ResolveContentDirectory("EngineContent") / Fallback;
 }
 
 std::unique_ptr<ParticleEditorWorkspace>& ResolveWorkspace()

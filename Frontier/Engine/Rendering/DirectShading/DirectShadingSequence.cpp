@@ -1,22 +1,23 @@
 /*==========================================================================================================================================
-                                                   ANALYTICILLUMINATIONSEQUENCE.CPP
+                                                     DIRECTSHADINGSEQUENCE.CPP
 ==========================================================================================================================================*/
-// 🧩 Bring-up and refresh of the analytic illumination: shared bindings, the refresh profile (camera, sun, sky gradient, the sun's
+// 🧩 Bring-up and refresh of direct shading: shared bindings, the refresh profile (camera, sun, sky gradient, the sun's
 //    orthographic box around the camera) and the two raster sequences in one submission.
-#include "AnalyticIlluminationSequence.h"
+#include "DirectShadingSequence.h"
+#include "Frontier/Engine/Foundation/Constants.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstring>
-namespace Frontier::AnalyticIllumination
+namespace Frontier::DirectShading
 {
 using namespace Frontier::GlobalIllumination;
 namespace
 {
-constexpr uint32_t SolarDepthExtent  = 2048;    // [texel]
-constexpr double   SolarHalfExtent   = 90.0;    // [m] half side of the sun's orthographic box
-constexpr double   SolarReach        = 400.0;   // [m] depth range of that box
-constexpr double   DegreesToRadian   = 3.14159265358979323846 / 180.0;
+constexpr uint32_t SolarDepthExtent = 2048;   // [texel]
+constexpr double   SolarHalfExtent  = 90.0;   // [m] half side of the sun's orthographic box
+constexpr double   SolarReach       = 400.0;  // [m] depth range of that box
+constexpr double   DegreesToRadian  = MathConstantsD::DegreesToRadians;
 
 // 📝 Linear Rec.709 colour of a black body (Tanner Helland's fit, normalised to its brightest channel).
 Vector3 ResolveBlackBodyColour(double Kelvin)
@@ -35,7 +36,7 @@ Vector3 ResolveBlackBodyColour(double Kelvin)
 }
 
 // 📝 The refresh profile, 76 floats in float4 rows (AnalyticLayouts.slang AnalyticConstants).
-std::vector<uint8_t> EncodeAnalyticConstants(const AnalyticCamera& Camera, const AnalyticSun& Sun, std::array<uint32_t, 2> Extent)
+std::vector<uint8_t> EncodeDirectShadingConstants(const DirectShadingCamera& Camera, const DirectShadingSun& Sun, std::array<uint32_t, 2> Extent)
 {
     std::vector<uint8_t> Bytes(76 * 4, 0u);
     auto Scalar = [&Bytes](size_t Index, double Value) {
@@ -80,9 +81,9 @@ std::vector<uint8_t> EncodeAnalyticConstants(const AnalyticCamera& Camera, const
     Row(52, SunToward, std::cos(0.5 * std::max(0.05, Sun.AngularDiameter) * DegreesToRadian));
     Row(56, ScaleVector(Colour, Strength), 1.0 / SolarDepthExtent);
     const double Sky = 0.04 + 0.96 * Daylight;
-    Row(60, ScaleVector(Vector3{0.20, 0.38, 0.80}, 0.9 * Sky), 0.0005);                                       // zenith, depth bias
+    Row(60, ScaleVector(Vector3{0.20, 0.38, 0.80}, 0.9 * Sky), 0.0005);                                                // zenith, depth bias
     Row(64, ScaleVector(Vector3{0.62 + 0.25 * (1 - Daylight), 0.72, 0.86 - 0.2 * (1 - Daylight)}, 0.9 * Sky), 0.55);   // horizon, fill
-    Row(68, Vector3{0.30, 0.27, 0.22}, 1.0);                                                                  // ground, specular
+    Row(68, Vector3{0.30, 0.27, 0.22}, 1.0);                                                                           // ground, specular
     Scalar(72, Extent[0]);
     Scalar(73, Extent[1]);
     Scalar(74, 1.0 / std::max(1u, Extent[0]));
@@ -91,14 +92,14 @@ std::vector<uint8_t> EncodeAnalyticConstants(const AnalyticCamera& Camera, const
 }
 } // namespace
 
-AnalyticIlluminationSequence::AnalyticIlluminationSequence(DeviceExchange& Exchange, std::filesystem::path SpirvFolder)
+DirectShadingSequence::DirectShadingSequence(DeviceExchange& Exchange, std::filesystem::path SpirvFolder)
     : Exchange_(Exchange), Shaders_(Exchange, std::move(SpirvFolder))
 {
 }
 
-bool AnalyticIlluminationSequence::Construct(const SceneStructure& Scene, const std::shared_ptr<DeviceRegion>& VertexRegion,
-                                             const std::shared_ptr<DeviceRegion>& OccupantRegion, const std::shared_ptr<DeviceRegion>& MaterialRegion,
-                                             std::string* OutDiagnostic)
+bool DirectShadingSequence::Construct(const SceneStructure& Scene, const std::shared_ptr<DeviceRegion>& VertexRegion,
+                                      const std::shared_ptr<DeviceRegion>& OccupantRegion, const std::shared_ptr<DeviceRegion>& MaterialRegion,
+                                      std::string* OutDiagnostic)
 {
     try
     {
@@ -108,11 +109,11 @@ bool AnalyticIlluminationSequence::Construct(const SceneStructure& Scene, const 
         MaterialRegion_ = MaterialRegion;
         using D = DescriptorCode;
         const std::vector<DescriptorSlot> Slots = {{D::Uniform}, {D::StorageRead}, {D::StorageRead}, {D::TextureDepth2D}, {D::SamplerComparison}};
-        Layout_ = Exchange_.ConstructDescriptorLayout(Slots, "Analytic illumination");
-        ConstantRegion_ = Exchange_.ConstructRegion(76 * 4, "Analytic refresh profile");
+        Layout_         = Exchange_.ConstructDescriptorLayout(Slots, "Direct shading");
+        ConstantRegion_ = Exchange_.ConstructRegion(76 * 4, "Direct shading refresh profile");
         std::vector<uint32_t> Identities(std::max<size_t>(1, Scene.Occupants.size()));
         for (uint32_t Index = 0; Index < Identities.size(); ++Index) Identities[Index] = Index;
-        Instances_ = Exchange_.ConstructRegionFrom(Identities.data(), Identities.size() * 4, "Analytic instance identities");
+        Instances_ = Exchange_.ConstructRegionFrom(Identities.data(), Identities.size() * 4, "Direct shading instance identities");
         SamplerSpecification Comparison;
         Comparison.MagFilter = FilterMode::Linear;
         Comparison.MinFilter = FilterMode::Linear;
@@ -124,31 +125,31 @@ bool AnalyticIlluminationSequence::Construct(const SceneStructure& Scene, const 
         Shading_ = std::make_unique<SurfaceShadingRasterization>(Exchange_, Shaders_);
         Shading_->ConstructPrograms(Layout_);
         Group_ = Exchange_.ConstructDescriptorGroup(Layout_, {ConstantRegion_, OccupantRegion_, MaterialRegion_, Solar_->DepthView, Comparison_},
-                                                    "Analytic illumination");
+                                                    "Direct shading");
     }
     catch (const std::exception& Error)
     {
-        if (OutDiagnostic) *OutDiagnostic = std::string("analytic illumination: ") + Error.what();
+        if (OutDiagnostic) *OutDiagnostic = std::string("direct shading: ") + Error.what();
         return false;
     }
     return true;
 }
 
-bool AnalyticIlluminationSequence::Refresh(const AnalyticCamera& Camera, const AnalyticSun& Sun, std::array<uint32_t, 2> Extent,
-                                           const std::shared_ptr<DeviceTextureView>& Target, std::string* OutDiagnostic)
+bool DirectShadingSequence::Refresh(const DirectShadingCamera& Camera, const DirectShadingSun& Sun, std::array<uint32_t, 2> Extent,
+                                    const std::shared_ptr<DeviceTextureView>& Target, std::string* OutDiagnostic)
 {
     if (!Scene_ || !Target) return false;
     const auto Start = std::chrono::steady_clock::now();
     if (Shading_->Extent != Extent) Shading_->ConstructTargets(Extent[0], Extent[1]);
-    const std::vector<uint8_t> Profile = EncodeAnalyticConstants(Camera, Sun, Extent);
+    const std::vector<uint8_t> Profile = EncodeDirectShadingConstants(Camera, Sun, Extent);
     Exchange_.WriteRegion(ConstantRegion_, 0, Profile.data(), Profile.size());
     CommandSequence Sequence = Exchange_.BeginSequence();
     Solar_->Record(Sequence, Group_, *Scene_, VertexRegion_, Instances_);
     Shading_->Record(Sequence, Group_, *Scene_, VertexRegion_, Instances_, Target);
     Sequence.OrderAfterEarlierWork();
-    Exchange_.LabelSubmissions("analytic illumination refresh");
+    Exchange_.LabelSubmissions("direct shading refresh");
     const bool Submitted = Exchange_.Submit(Sequence, OutDiagnostic);
     LastRefreshMilliseconds_ = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - Start).count();
     return Submitted;
 }
-} // namespace Frontier::AnalyticIllumination
+} // namespace Frontier::DirectShading

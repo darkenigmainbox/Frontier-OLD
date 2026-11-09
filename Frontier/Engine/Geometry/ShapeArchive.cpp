@@ -7,6 +7,7 @@
 #include "Engine/Geometry/ShapeArchive.h"
 
 #include "Engine/Geometry/GeometryProcessing/VolumeDistanceArchive.h"
+#include "Frontier/Engine/Foundation/Constants.h"
 
 #include <toml++/toml.hpp>
 
@@ -22,7 +23,7 @@ namespace Frontier
 namespace
 {
 
-constexpr double   Pi                  = 3.14159265358979323846;
+constexpr double   Pi                  = MathConstantsD::Pi;
 constexpr uint32_t MaximumVolumeTexels = 128;     // [texel] OccupantDistanceSpace's longest volume axis
 constexpr uint32_t MinimumVolumeTexels = 8;       // [texel] and its shortest
 constexpr double   PlaneThickness      = 0.01;    // [m] the plane slab

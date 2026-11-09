@@ -1,12 +1,11 @@
 /*==========================================================================================================================================
-                                                    ANALYTICILLUMINATIONCAPTURE.CPP
+                                                       DIRECTSHADINGCAPTURE.CPP
 ==========================================================================================================================================*/
-// 🧩 The analytic illumination in the editor's own scene viewport, offscreen: the proving ground through the global illumination and
-//    through the analytic renderer from the same camera, the sun's shadow and sky response, the hand-back to the global illumination,
-//    and the refresh times either way.
+// 🧩 Direct shading in the editor's own scene viewport, offscreen: the proving ground through global illumination and through
+//    direct shading from the same camera, the sun's shadow and sky response, hand-back to global illumination, and refresh times.
 
-// 📝 Usage: AnalyticIlluminationCapture <GlobalIllumination shaders> <Environment shaders> <ProvingGround> <CelestialMaps> <out>
-//    [quality] [width] [height] [refreshes]. The AnalyticIllumination archives sit beside the GlobalIllumination ones.
+// 📝 Usage: DirectShadingCapture <GlobalIllumination shaders> <Environment shaders> <ProvingGround> <CelestialMaps> <out>
+//    [quality] [width] [height] [refreshes]. The DirectShading archives sit beside the GlobalIllumination ones.
 #include "Frontier/Engine/Rendering/SceneViewport/SceneViewport.h"
 #include "stb_image_write.h"
 #include <algorithm>
@@ -66,7 +65,7 @@ int main(int ArgumentCount, char** Arguments)
 {
     if (ArgumentCount < 6)
     {
-        std::printf("usage: AnalyticIlluminationCapture <GlobalIllumination shaders> <Environment shaders> <ProvingGround> <CelestialMaps> <out> "
+        std::printf("usage: DirectShadingCapture <GlobalIllumination shaders> <Environment shaders> <ProvingGround> <CelestialMaps> <out> "
                     "[quality] [width] [height] [refreshes]\n");
         return 2;
     }
@@ -126,36 +125,36 @@ int main(int ArgumentCount, char** Arguments)
         return Result;
     };
 
-    // ① the global illumination, as the editor renders by default
+    // ① global illumination, as the editor renders by default
     ViewportRendering Global;
     const Capture Reference = Run(Global, Refreshes, "GlobalIllumination");
 
-    // ② the analytic illumination of the same scene, camera and sun (the first refresh builds its programs)
-    ViewportRendering Analytic;
-    Analytic.AnalyticIllumination = true;
+    // ② direct shading of the same scene, camera and sun (the first refresh builds its programs)
+    ViewportRendering Direct;
+    Direct.DirectShading = true;
     const auto BuildStart = std::chrono::steady_clock::now();
-    const Capture First   = Run(Analytic, 1, "AnalyticFirstRefresh");
-    std::printf("analytic bring-up and first refresh: %.3f s\n", std::chrono::duration<double>(std::chrono::steady_clock::now() - BuildStart).count());
-    ReportCheck(First.Refreshed, "the analytic illumination builds on the global illumination's scene");
+    const Capture First   = Run(Direct, 1, "DirectShadingFirstRefresh");
+    std::printf("direct shading bring-up and first refresh: %.3f s\n", std::chrono::duration<double>(std::chrono::steady_clock::now() - BuildStart).count());
+    ReportCheck(First.Refreshed, "direct shading builds on the global illumination's scene");
     if (!First.Refreshed) return 1;
-    const Capture Settled = Run(Analytic, Refreshes, "AnalyticIllumination");
+    const Capture Settled = Run(Direct, Refreshes, "DirectShading");
     const uint32_t Colours = CountDistinctColours(Settled.Rgba);
-    ReportCheck(Colours > 64, "the analytic image is lit, shaded geometry rather than a flat fill", std::to_string(Colours) + " distinct colours");
+    ReportCheck(Colours > 64, "direct shading image is lit, shaded geometry rather than a flat fill", std::to_string(Colours) + " distinct colours");
     const double SkyBlue = BandMean(Settled.Rgba, Width, 0, Height / 12, 2), SkyRed = BandMean(Settled.Rgba, Width, 0, Height / 12, 0);
     ReportCheck(SkyBlue > SkyRed, "the sky band at the top is blue over red", std::to_string(SkyBlue) + " vs " + std::to_string(SkyRed));
-    std::printf("analytic vs global: mean absolute difference %.4f; refresh %.3f s vs %.3f s (%.1fx faster)\n",
+    std::printf("direct shading vs global: mean absolute difference %.4f; refresh %.3f s vs %.3f s (%.1fx faster)\n",
                 MeanAbsoluteDifference(Reference.Rgba, Settled.Rgba), Settled.MeanSeconds, Reference.MeanSeconds,
                 Reference.MeanSeconds / std::max(1e-9, Settled.MeanSeconds));
-    ReportCheck(Settled.MeanSeconds < Reference.MeanSeconds, "the analytic refresh is cheaper than the global illumination's");
+    ReportCheck(Settled.MeanSeconds < Reference.MeanSeconds, "direct shading refresh is cheaper than global illumination's");
 
     // ③ the sun drives it: a low western sun and no sun at all both change the image
     Environment.Solar.ElevationDegrees = 9.0f;
     Environment.Solar.AzimuthDegrees   = 262.0f;
-    const Capture LowSun = Run(Analytic, 2, "AnalyticLowSun");
+    const Capture LowSun = Run(Direct, 2, "DirectShadingLowSun");
     const double LowSunChange = MeanAbsoluteDifference(Settled.Rgba, LowSun.Rgba);
     ReportCheck(LowSunChange > 0.01, "a low western sun relights the scene", std::to_string(LowSunChange));
     Environment.Solar.Enabled = false;
-    const Capture NoSun = Run(Analytic, 2, "AnalyticWithoutSun");
+    const Capture NoSun = Run(Direct, 2, "DirectShadingWithoutSun");
     const double Fill = (BandMean(NoSun.Rgba, Width, Height / 2, Height / 2, 0) + BandMean(NoSun.Rgba, Width, Height / 2, Height / 2, 1) +
                          BandMean(NoSun.Rgba, Width, Height / 2, Height / 2, 2)) / 3.0;
     const double Lit = (BandMean(Settled.Rgba, Width, Height / 2, Height / 2, 0) + BandMean(Settled.Rgba, Width, Height / 2, Height / 2, 1) +
@@ -166,10 +165,10 @@ int main(int ArgumentCount, char** Arguments)
     Environment.Solar.ElevationDegrees = 38.0f;
     Environment.Solar.AzimuthDegrees   = 132.0f;
 
-    // ④ the global illumination takes the presented image back
+    // ④ global illumination takes the presented image back
     const Capture Returned = Run(Global, 2, "GlobalIlluminationReturned");
     ReportCheck(Returned.Refreshed && MeanAbsoluteDifference(Returned.Rgba, Settled.Rgba) > 0.005,
-                "the global illumination resumes after the analytic illumination rests");
-    std::printf("AnalyticIlluminationCapture: %d failing checks\n", Failures);
+                "global illumination resumes after direct shading rests");
+    std::printf("DirectShadingCapture: %d failing checks\n", Failures);
     return Failures == 0 ? 0 : 1;
 }

@@ -297,7 +297,7 @@ SceneViewportRefresh RenderingExtension::Render(const SceneViewportRequest& Requ
     Rendering.Inspection           = static_cast<uint32_t>(std::clamp(Pipeline.InspectionModeIndex, 0, 14));
     Rendering.VirtualizedGeometry  = Pipeline.VirtualizedGeometry;
     Rendering.VirtualizedStreamSlots = static_cast<uint32_t>(std::max(0, Pipeline.VirtualizedStreamSlots));
-    Rendering.AnalyticIllumination   = Pipeline.AnalyticIllumination;
+    Rendering.DirectShading          = Pipeline.DirectShading;
     namespace Bit = Frontier::GlobalIllumination::RefinementBit;
     Rendering.Refinements = (Pipeline.SolarDisc ? Bit::SolarDisc : 0u) | (Pipeline.StratifiedSun ? Bit::StratifiedSun : 0u) |
                             (Pipeline.PenumbraFilter ? Bit::PenumbraFilter : 0u) | (Pipeline.MirrorFilter ? Bit::MirrorFilter : 0u) |
@@ -364,8 +364,8 @@ SceneViewportRefresh RenderingExtension::Render(const SceneViewportRequest& Requ
     Outcome.View   = Viewport_->QueryPresentedView();
     Outcome.Extent = Viewport_->QueryScreenExtent();
     char Status[160];
-    if (Pipeline.AnalyticIllumination)
-        std::snprintf(Status, sizeof(Status), "LIVE: Analytic illumination (fast preview)  |  %u x %u  |  %.1f ms", Outcome.Extent[0], Outcome.Extent[1],
+    if (Pipeline.DirectShading)
+        std::snprintf(Status, sizeof(Status), "LIVE: Direct shading (fast preview)  |  %u x %u  |  %.1f ms", Outcome.Extent[0], Outcome.Extent[1],
                       RefreshMilliseconds_);
     else
         std::snprintf(Status, sizeof(Status), "LIVE: ReSTIR GI %s + PlanetaryAtmosphere  |  %u x %u  |  %.1f ms", RayTracing ? "RTX" : "GTX", Outcome.Extent[0],
@@ -375,9 +375,9 @@ SceneViewportRefresh RenderingExtension::Render(const SceneViewportRequest& Requ
     // 📝 The demo's readout figures (IlluminationHost.js PresentMeasurements): renderer tag and the TLAS line.
     const Frontier::GlobalIllumination::ViewportStatistics Statistics = Viewport_->QueryStatistics();
     char Tag[96];
-    if (Pipeline.AnalyticIllumination)
+    if (Pipeline.DirectShading)
     {
-        std::snprintf(Tag, sizeof(Tag), "Analytic illumination (no rays)");
+        std::snprintf(Tag, sizeof(Tag), "Direct shading (no rays)");
     }
     else if (Statistics.RayTracing)
     {

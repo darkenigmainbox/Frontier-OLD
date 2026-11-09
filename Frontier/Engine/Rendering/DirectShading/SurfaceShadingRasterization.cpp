@@ -1,9 +1,9 @@
 /*==========================================================================================================================================
                                                     SURFACESHADINGRASTERIZATION.CPP
 ==========================================================================================================================================*/
-// 🧩 Sky and surface programs of the analytic illumination and their one raster sequence into the presented image.
+// 🧩 Sky and surface programs of direct shading and their one raster sequence into the presented image.
 #include "SurfaceShadingRasterization.h"
-namespace Frontier::AnalyticIllumination
+namespace Frontier::DirectShading
 {
 using namespace Frontier::GlobalIllumination;
 
@@ -42,7 +42,7 @@ void SurfaceShadingRasterization::ConstructTargets(uint32_t Width, uint32_t Heig
 {
     Extent = {Width, Height};
     TextureSpecification Specification;
-    Specification.Label  = "Analytic surface depth";
+    Specification.Label  = "Direct shading surface depth";
     Specification.Width  = Width;
     Specification.Height = Height;
     Specification.Format = TextureFormat::Depth32Float;
@@ -57,7 +57,7 @@ void SurfaceShadingRasterization::Record(CommandSequence& Sequence, const std::s
 {
     const std::array<ColorAttachment, 1> Colors = {{{Target, LoadOperation::Clear, {0, 0, 0, 1}}}};
     const DepthAttachment Depth{DepthView, LoadOperation::Clear, 0.0f};
-    Sequence.BeginRaster(Colors, &Depth, "Analytic surface shading");
+    Sequence.BeginRaster(Colors, &Depth, "Direct shading surface pass");
     Sequence.BindProgram(SkyProgram_);
     Sequence.BindGroup(0, Group);
     Sequence.Draw(3);
@@ -72,4 +72,4 @@ void SurfaceShadingRasterization::Record(CommandSequence& Sequence, const std::s
     }
     Sequence.EndRaster();
 }
-} // namespace Frontier::AnalyticIllumination
+} // namespace Frontier::DirectShading

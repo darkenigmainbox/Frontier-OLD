@@ -4,10 +4,14 @@
 // 🧩 The particle space and its refresh in C++ (the prototype's Scene): effects with their wind links, bursts, molecular sub-steps, the jobs, the guides.
 
 #include "Frontier/Engine/PhysicalDynamics/ParticleDynamics/ParticleSpace.h"
+#include "Frontier/Engine/PhysicalDynamics/ParticleDynamics/ParticleSpaceCodec.h"
+
+#include <toml++/toml.hpp>
 
 #include <algorithm>
 #include <cmath>
 #include <numbers>
+#include <sstream>
 
 namespace Frontier
 {
@@ -104,6 +108,33 @@ void ParticleSpace::ApplyWindLink(const ParticlePreset& Preset)
         Found->Centre[2] = Preset.Parameters.OriginMetres[2];
     }
     Found->Enabled = true;
+}
+
+void ParticleSpace::SampleLevelForceField(const IFieldSampler& Field)
+{
+    const Vec3d Anchor{ LevelWind.AnchorMetres[0], LevelWind.AnchorMetres[1], LevelWind.AnchorMetres[2] };
+    const Vec3d Flow = Field.SampleFieldFlow(WorldToFieldAxes(Anchor));
+    LevelWind.FlowMps = { Flow.X, Flow.Y, Flow.Z };
+    AdvanceRevision();
+}
+
+void ParticleSpace::SerializeDomainState(toml::table& Out) const
+{
+    Out = toml::parse(EncodeParticleSpace(*this));
+}
+
+void ParticleSpace::DeserializeDomainState(const toml::table& In)
+{
+    std::ostringstream Stream;
+    Stream << In;
+    ParticleSpace Loaded;
+    std::string   Diagnostic;
+    if (!DecodeParticleSpace(Stream.str(), Loaded, Diagnostic))
+    {
+        return;   // 📝 a malformed replication payload leaves the local space untouched
+    }
+    *this = std::move(Loaded);
+    AdvanceRevision();
 }
 
 void ParticleSpace::ConstructDefault(const ParticleEffectLibrary& Library, const std::vector<std::string>* Presets)

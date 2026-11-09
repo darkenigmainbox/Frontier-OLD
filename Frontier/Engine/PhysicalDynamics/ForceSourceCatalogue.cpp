@@ -4,6 +4,7 @@
 // 🧩 The sixteen force types of the approved Force Field editor, evaluated as its catalogue does, number for number.
 
 #include "Engine/PhysicalDynamics/ForceSourceCatalogue.h"
+#include "Frontier/Engine/Foundation/Constants.h"
 
 #include <algorithm>
 #include <cmath>
@@ -15,8 +16,8 @@ namespace Frontier
 namespace
 {
 
-constexpr double π        = 3.14159265358979323846;
-constexpr double Radian   = π / 180.0;
+constexpr double π        = MathConstantsD::Pi;
+constexpr double Radian   = MathConstantsD::DegreesToRadians;
 constexpr double Infinity = std::numeric_limits<double>::infinity();
 
 double Smooth01(double Share) noexcept

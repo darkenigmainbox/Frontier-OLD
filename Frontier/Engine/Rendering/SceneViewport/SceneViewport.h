@@ -7,7 +7,7 @@
 #pragma once
 
 #include "EnvironmentOverlay.h"
-#include "Rendering/AnalyticIllumination/AnalyticIlluminationSequence.h"
+#include "Rendering/DirectShading/DirectShadingSequence.h"
 #include "Rendering/GlobalIllumination/OccupantRelocation.h"
 #include "Rendering/GlobalIllumination/PickProjection.h"
 
@@ -60,7 +60,7 @@ struct ViewportRendering
     uint32_t Inspection           = 0;       // [-] the demo's inspection view 0–14 (RefreshToggles::Inspection)
     bool     VirtualizedGeometry  = false;   // [-] the cluster nesting takeover (the demo's ?hierarchy=1)
     uint32_t VirtualizedStreamSlots = 0;     // [-] arena slots the pages stream through (0: one per page)
-    bool     AnalyticIllumination = false;   // [-] the fast closed-form renderer (AnalyticIllumination) instead of the GI
+    bool     DirectShading        = false;   // [-] the fast direct-lighting rasterizer (DirectShading) instead of the GI
     uint32_t Refinements          = 0;       // [-] RefinementBit mask of options beyond the demo (0: the demo)
     // 📝 The rest of the Render settings record. Every default is the demo's, so a caller that sets only the fields above refreshes
     //    exactly as before; the fields above overwrite Toggles' Indirect, Antialias, ExposureCompensation, Inspection and Refinements,
@@ -137,7 +137,7 @@ class SceneViewport
     // 📝 The same for a pixel of an image of ScreenExtent pixels seen through Camera (validation, no refresh needed).
     bool PickOccupants(const ViewportCamera& Camera, std::array<uint32_t, 2> ScreenExtent, std::array<uint32_t, 2> Pixel, OccupantPick& Outcome,
                        std::string* OutDiagnostic = nullptr);
-    // 📝 The unjittered view-projection the refresh encodes for Camera at ScreenExtent (RefreshEncoder, AnalyticIlluminationSequence).
+    // 📝 The unjittered view-projection the refresh encodes for Camera at ScreenExtent (RefreshEncoder, DirectShadingSequence).
     [[nodiscard]] static Transform ResolveViewProjection(const ViewportCamera& Camera, std::array<uint32_t, 2> ScreenExtent) noexcept;
     [[nodiscard]] const SceneStructure* QueryScene() const noexcept { return Host_ ? &Host_->Scene : nullptr; }
     [[nodiscard]] const std::vector<ShapeArchive>& QueryShapes() const noexcept { return Shapes_; }
@@ -154,7 +154,7 @@ class SceneViewport
     std::vector<ShapeArchive>              Shapes_{};                        // [-] the engine shapes the scene was built with
     bool                                   VirtualizedConfigured_ = false;   // [-] last levelspace value of the cluster takeover
     RefreshToggles                         LastToggles_{};                   // [-] what the last global-illumination refresh ran with
-    std::unique_ptr<AnalyticIllumination::AnalyticIlluminationSequence> Analytic_{};   // [-] built on first selection
+    std::unique_ptr<DirectShading::DirectShadingSequence> DirectShading_{};   // [-] built on first selection
     std::unique_ptr<EnvironmentOverlay>    Overlay_{};
     std::unique_ptr<PickProjection>        Pick_{};                          // [-] built on the first pick
     std::optional<ViewportCamera>          PickCamera_{};                    // [-] the camera of the last refreshed image

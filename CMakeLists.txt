@@ -126,6 +126,8 @@ add_library(FrontierSceneEditorUI STATIC
     Frontier/Engine/Scene/RecordStore.cpp
     Frontier/Engine/Scene/RecordEntry.cpp
     Frontier/Engine/Scene/SceneDirectory.cpp
+    Frontier/Engine/Scene/EnvironmentSpaceCodecs.cpp
+    Frontier/Engine/Scene/DynamicsSpaceCodecs.cpp
     Frontier/Engine/Scene/WorldSpace.cpp
     Frontier/Engine/Scene/GeometryLayout.cpp
     Frontier/Engine/Diagnostics/LogCategories.cpp
@@ -267,6 +269,7 @@ add_library(FrontierParticleExtension STATIC
 target_link_libraries(FrontierParticleExtension PUBLIC FrontierSceneEditorUI FrontierParticleSimulation)
 add_library(FrontierNetworkingExtension STATIC
     Frontier/Extensions/Networking/NetworkingSpace.cpp
+    Frontier/Extensions/Networking/NetworkingTransport.cpp
     Frontier/Extensions/Networking/NetworkingExtension.cpp)
 target_link_libraries(FrontierNetworkingExtension PUBLIC FrontierSceneEditorUI)
 # 📝 Physics: JoltPhysics (pinned, Automation/JoltPhysics.cmake) behind PhysicsSpace; only the extension sees Jolt's headers.
@@ -274,6 +277,7 @@ include(Automation/JoltPhysics.cmake)
 frontier_add_jolt()
 add_library(FrontierPhysicsExtension STATIC
     Frontier/Extensions/Physics/JoltExtension.cpp
+    Frontier/Extensions/Physics/JoltSubstrate.cpp
     Frontier/Extensions/Physics/PhysicsSpace.cpp
     Frontier/Extensions/Physics/PhysicsExtension.cpp)
 target_link_libraries(FrontierPhysicsExtension PUBLIC FrontierSceneEditorUI PRIVATE Jolt)
@@ -299,6 +303,8 @@ add_library(EverestProjectRuntime STATIC
     Frontier/Engine/Scene/RecordStore.cpp
     Frontier/Engine/Scene/RecordEntry.cpp
     Frontier/Engine/Scene/SceneDirectory.cpp
+    Frontier/Engine/Scene/EnvironmentSpaceCodecs.cpp
+    Frontier/Engine/Scene/DynamicsSpaceCodecs.cpp
     Frontier/Engine/Scene/WorldSpace.cpp
     Frontier/Engine/PhysicalDynamics/ForceSourceCatalogue.cpp
     Frontier/Engine/Scene/GeometryLayout.cpp
@@ -850,7 +856,7 @@ endif()
 
 include(Automation/EnvironmentRendering.cmake)
 include(Automation/VirtualizedGeometryRendering.cmake)
-include(Automation/AnalyticIlluminationRendering.cmake)
+include(Automation/DirectShadingRendering.cmake)
 include(Automation/ParticleSimulationRendering.cmake)
 include(Automation/GlobalIlluminationRendering.cmake)
 

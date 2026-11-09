@@ -5,6 +5,14 @@
 
 #pragma once
 
+#include "Frontier/Engine/Foundation/Constants.h"
+#include "Frontier/Engine/Scene/Profiles/KinematicsProfile.h"
+#include "Frontier/Engine/Scene/Profiles/MassProfile.h"
+#include "Frontier/Engine/Scene/Profiles/ReplicationProfile.h"
+#include "Frontier/Engine/Scene/Profiles/SpatialProfile.h"
+#include "Frontier/Engine/Scene/Profiles/SurfaceOpticsProfile.h"
+#include "Frontier/Engine/Scene/Profiles/ThermalChemicalProfiles.h"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -103,10 +111,10 @@ struct RenderPipelineConfiguration : RevisionCounter
     bool  VirtualizedGeometry    = false;
     int   VirtualizedStreamSlots = 0;       // [-] 0: one arena slot per page
 
-    // 📝 Debug views: the demo's inspection views 0–14 and, as a view of its own, the editor's fast closed-form renderer
+    // 📝 Debug views: the demo's inspection views 0–14 and, as a view of its own, the editor's direct-shading rasterizer
     int   InspectionModeIndex    = 0;       // [-] 0–14 (RefreshToggles::Inspection)
     int   DistanceInspection     = 1;       // [-] view 6 reads: 1 normals · 2 traversal steps · 3 next-event light / cards
-    bool  AnalyticIllumination   = false;   // [-] the analytic illumination instead of the global illumination
+    bool  DirectShading          = false;   // [-] direct shading instead of global illumination
 
     // 📝 Refresh timing
     bool  LiveRefresh            = true;    // [-] false holds the last image (compare a still against a change)
@@ -186,6 +194,8 @@ struct OpticalFlareConfiguration : RevisionCounter
     uint32_t RayCount            = 6;
     bool WarmStreak              = false;
     float PreviewPosition[2]     = {0.28f, 0.43f};
+    std::string SpaceFile{};              // "<level>.<record>.effectspace"
+    ReplicationProfile Replication{};
 };
 
 struct AtmosphereOpticalConfiguration
@@ -555,6 +565,8 @@ struct ForceFieldConfiguration : RevisionCounter
     float    TimelineRate            = 1.0f;
     bool     TimelinePlaying         = true;
     double   TimelineSeconds         = 0.0;
+    std::string SpaceFile{};              // "<level>.<record>.forcespace"
+    ReplicationProfile Replication{};
 };
 
 struct WindConfiguration : RevisionCounter
@@ -579,6 +591,7 @@ struct WindConfiguration : RevisionCounter
     float    MesoscaleStrength    = 0.22f;
     float    GroundHeightMetres   = 0.0f;
     uint32_t Seed                 = 7331;
+    ReplicationProfile Replication{};
 };
 
 // 📝 One localized force (a ForceSource record under the Force Field). The position is in scene axes (x east, y north,
@@ -629,6 +642,8 @@ struct ForceSourceConfiguration : RevisionCounter
     double SwallowRadiusMetres        = 0.0;
 
     double TriggeredAtSeconds = -1.0;   // [s] timeline time of the last Fire; < 0 armed. Not saved.
+    SpatialProfile     Spatial{};
+    ReplicationProfile Replication{};
 };
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -650,6 +665,9 @@ struct FluidPlumeConfiguration : RevisionCounter
     float    BlackbodyCoreKelvin  = 1850.0f;
     bool     CombustionEnabled    = true;
     bool     SelfShadowing        = true;
+    std::string        SpaceFile{};   // "<level>.<record>.fluidspace"
+    SpatialProfile     Spatial{};
+    ReplicationProfile Replication{};
 };
 
 struct FractureConfiguration : RevisionCounter
@@ -663,14 +681,18 @@ struct FractureConfiguration : RevisionCounter
     bool     FractureArmed           = true;
     bool     ImpactDustBurst         = true;
     uint32_t PrefractureTriggerCount = 0;
+    std::string        SpaceFile{};   // "<level>.<record>.fracturespace"
+    ReplicationProfile Replication{};
 };
 
 // 📝 A Particles record keeps its ParticleSpace (effects, force fields, wind, lightning) in a file of its own beside the level,
 //    edited in the Particle editor. SpaceFile is relative to the level's folder; empty until the editor first opens the record.
 struct ParticleConfiguration : RevisionCounter
 {
-    bool        Enabled = true;
-    std::string SpaceFile;   // "<level>.<record>.particlespace"
+    bool               Enabled = true;
+    std::string        SpaceFile;   // "<level>.<record>.particlespace"
+    SpatialProfile     Spatial{};
+    ReplicationProfile Replication{};
 };
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -688,6 +710,31 @@ struct SpatialConfiguration : RevisionCounter
     float PositionMetres[3]     = {0.0f, 1.0f, 0.0f};
     float OrientationDegrees[3] = {0.0f, 0.0f, 0.0f};
     float Scale[3]              = {1.0f, 1.0f, 1.0f};
+    ReplicationProfile Replication{};
+
+    [[nodiscard]] SpatialProfile ToSpatialProfile() const noexcept
+    {
+        return {
+            { PositionMetres[0], PositionMetres[1], PositionMetres[2] },
+            { OrientationDegrees[0], OrientationDegrees[1], OrientationDegrees[2] },
+            { Scale[0], Scale[1], Scale[2] },
+            Revision,
+        };
+    }
+
+    void ApplySpatialProfile(const SpatialProfile& Profile) noexcept
+    {
+        PositionMetres[0]     = static_cast<float>(Profile.PositionMetres.X);
+        PositionMetres[1]     = static_cast<float>(Profile.PositionMetres.Y);
+        PositionMetres[2]     = static_cast<float>(Profile.PositionMetres.Z);
+        OrientationDegrees[0] = static_cast<float>(Profile.OrientationDegrees.X);
+        OrientationDegrees[1] = static_cast<float>(Profile.OrientationDegrees.Y);
+        OrientationDegrees[2] = static_cast<float>(Profile.OrientationDegrees.Z);
+        Scale[0]              = static_cast<float>(Profile.Scale.X);
+        Scale[1]              = static_cast<float>(Profile.Scale.Y);
+        Scale[2]              = static_cast<float>(Profile.Scale.Z);
+        AdvanceRevision();
+    }
 
     [[nodiscard]] float ComputeEuclideanDistance(const SpatialConfiguration& Other) const noexcept
     {
@@ -742,6 +789,35 @@ struct PhysicsConfiguration : RevisionCounter
     float             LinearDamping            = 0.04f;
     bool              DynamicBody              = true;
     bool              GravityCoupled           = true;
+    std::string       SpaceFile{};             // "<level>.<record>.physicsspace"
+    ReplicationProfile Replication{};
+
+    [[nodiscard]] MassProfile ToMassProfile() const noexcept
+    {
+        return {
+            Mass.MassKilograms,
+            Mass.DensityKgPerCubicMetre,
+            Mass.VolumeCubicMetres,
+            Restitution,
+            StaticFriction,
+            DynamicFriction,
+            LinearDamping,
+            0.05,
+            Revision,
+        };
+    }
+
+    [[nodiscard]] KinematicsProfile ToKinematicsProfile() const noexcept
+    {
+        return {
+            DynamicBody ? MotionRegime::Dynamic : MotionRegime::Fixed,
+            { LinearVelocityMps[0], LinearVelocityMps[1], LinearVelocityMps[2] },
+            { AngularVelocityRadSec[0], AngularVelocityRadSec[1], AngularVelocityRadSec[2] },
+            GravityCoupled,
+            true,
+            Revision,
+        };
+    }
 
     [[nodiscard]] float ComputeLinearSpeedMps() const noexcept
     {
@@ -753,7 +829,7 @@ struct PhysicsConfiguration : RevisionCounter
 
 struct ThermalConfiguration : RevisionCounter
 {
-    static constexpr float StefanBoltzmannConstant = 5.670374419e-8f; // [W / (m^2 * K^4)]
+    static constexpr float StefanBoltzmannConstant = PhysicsConstantsF::StefanBoltzmannWPerM2K4; // [W / (m^2 * K^4)]
 
     bool  Enabled                      = true;
     float TemperatureKelvin            = 293.15f; // [K]
@@ -788,7 +864,7 @@ struct ThermalConfiguration : RevisionCounter
 
 struct ChemicalConfiguration : RevisionCounter
 {
-    static constexpr float UniversalGasConstant = 8.314462618f; // [J / (mol * K)]
+    static constexpr float UniversalGasConstant = PhysicsConstantsF::UniversalGasConstantJPerMolK; // [J / (mol * K)]
 
     bool  Enabled                    = true;
     float MolarMassGramsPerMole      = 18.015f; // [g/mol]
@@ -894,6 +970,7 @@ struct GeometryConfiguration : RevisionCounter
     std::vector<ArrayModifierConfiguration> Modifiers{};   // [-] top to bottom
     std::vector<SurfaceSlotConfiguration>   SurfaceSlots{};   // [-] families this object no longer shares
     FractureConfiguration                   Fracture = [] { FractureConfiguration Disabled; Disabled.Enabled = false; return Disabled; }();
+    ReplicationProfile                      Replication{};
 
     // 📝 Resolved by the viewport against the loaded scene archive and published by the workspace; not saved.
     struct Resolution

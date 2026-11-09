@@ -160,7 +160,7 @@ measured refinements (`RefreshToggles::Refinements`), against converged referenc
   engine (library `FrontierParticleSimulation`, archive set `ParticleSimulation`).
 - `Frontier/Engine/Interface/ParticleEditor/` and `ParticleEditor.*`: the editor window, its pages and field overlay.
 - `Frontier/Extensions/Particle/ParticleExtension.*`: the engine on the editor's device.
-- `EngineContent/ParticleArchives/ParticleLibrary.toml`: the 52 presets, exported by
+- `EngineContent/ParticleArchives/ParticleLibrary.particlespace`: the 52 presets, exported by
   `Automation/ExportParticleLibrary.mjs`.
 - `Exhibits/ForceFieldEditor/` and `Exhibits/ParticleEditor/`: parity tests, captures and their READMEs. The plan is
   `Documentation/Plans/Ongoing/ForceFieldParticleIntegration.md`.

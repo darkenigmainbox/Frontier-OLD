@@ -1,9 +1,9 @@
 /*==========================================================================================================================================
                                                       SOLARDEPTHRASTERIZATION.CPP
 ==========================================================================================================================================*/
-// 🧩 Depth-only orthographic raster of the scene along the sun into the analytic illumination's shadow map.
+// 🧩 Depth-only orthographic raster of the scene along the sun into direct shading's shadow map.
 #include "SolarDepthRasterization.h"
-namespace Frontier::AnalyticIllumination
+namespace Frontier::DirectShading
 {
 using namespace Frontier::GlobalIllumination;
 
@@ -31,7 +31,7 @@ void SolarDepthRasterization::ConstructTargets(uint32_t Size)
 {
     Extent = Size;
     TextureSpecification Specification;
-    Specification.Label  = "Analytic solar depth";
+    Specification.Label  = "Direct shading solar depth";
     Specification.Width  = Size;
     Specification.Height = Size;
     Specification.Format = TextureFormat::Depth32Float;
@@ -44,7 +44,7 @@ void SolarDepthRasterization::Record(CommandSequence& Sequence, const std::share
                                      const std::shared_ptr<DeviceRegion>& VertexRegion, const std::shared_ptr<DeviceRegion>& Instances)
 {
     const DepthAttachment Depth{DepthView, LoadOperation::Clear, 1.0f};
-    Sequence.BeginRaster({}, &Depth, "Analytic solar depth");
+    Sequence.BeginRaster({}, &Depth, "Direct shading solar depth");
     Sequence.BindProgram(Program_);
     Sequence.BindGroup(0, Group);
     Sequence.BindVertexRegion(0, VertexRegion);
@@ -57,4 +57,4 @@ void SolarDepthRasterization::Record(CommandSequence& Sequence, const std::share
     }
     Sequence.EndRaster();
 }
-} // namespace Frontier::AnalyticIllumination
+} // namespace Frontier::DirectShading

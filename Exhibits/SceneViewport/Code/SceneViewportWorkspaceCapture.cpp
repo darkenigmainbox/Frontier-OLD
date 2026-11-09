@@ -162,7 +162,7 @@ int main(int ArgumentCount, char** Arguments)
 
             // 📝 Debug view 15: the analytic illumination instead of the global illumination (Render settings › Debug views).
             Pipeline->AccessConfiguration().InspectionModeIndex  = 0;
-            Pipeline->AccessConfiguration().AnalyticIllumination = true;
+            Pipeline->AccessConfiguration().DirectShading        = true;
             Pipeline->AccessConfiguration().AdvanceRevision();
             for (int Tick = 0; Tick < 2; ++Tick)
             {
@@ -174,10 +174,10 @@ int main(int ArgumentCount, char** Arguments)
                 ImGui::Render();
                 FrontierExhibit::AcknowledgeTextures();
             }
-            std::filesystem::path Analytic = OutputPath;
-            Analytic.replace_filename(OutputPath.stem().string() + "-Analytic" + OutputPath.extension().string());
-            WriteCapture(Analytic);
-            Pipeline->AccessConfiguration().AnalyticIllumination = false;
+            std::filesystem::path Direct = OutputPath;
+            Direct.replace_filename(OutputPath.stem().string() + "-Direct" + OutputPath.extension().string());
+            WriteCapture(Direct);
+            Pipeline->AccessConfiguration().DirectShading = false;
             Pipeline->AccessConfiguration().AdvanceRevision();
         }
 

@@ -1534,7 +1534,7 @@ the 5ec53579 line already in the tree; the owner chose it over porting the demo'
 - **Requested:** the second half of bringing the approved prototypes into the C++ editor before vehicles: the
   Particle editor, phase E of `Documentation/Plans/Ongoing/ForceFieldParticleIntegration.md`.
 - **Engine (E1–E3):** the eos engine (`549c477`) in C++, Vulkan and Slang, its behaviour unchanged.
-  - `EngineContent/ParticleArchives/ParticleLibrary.toml` holds the same 52 presets in 14 groups, exported from
+  - `EngineContent/ParticleArchives/ParticleLibrary.particlespace` holds the same 52 presets in 14 groups, exported from
     `presets.js`.
   - `PhysicalDynamics/ParticleDynamics/` holds the scene, the library decoder, the 12-type force taxonomy, the uniform
     packing and the lightning.

@@ -1,27 +1,26 @@
 /*==========================================================================================================================================
-                                                     SURFACESHADINGRASTERIZATION.H
+                                                       SOLARDEPTHRASTERIZATION.H
 ==========================================================================================================================================*/
-// 🧩 The analytic image: the gradient sky, then every rastered occupant lit in closed form, tone mapped into the presented image.
+// 🧩 The sun's depth map for direct shading: every rastered occupant projected orthographically along the sun.
 #pragma once
 #include "Rendering/GlobalIllumination/SceneStructure.h"
 #include "Rendering/GlobalIllumination/ShaderInterchange.h"
-namespace Frontier::AnalyticIllumination
+namespace Frontier::DirectShading
 {
-class SurfaceShadingRasterization
+class SolarDepthRasterization
 {
   public:
-    SurfaceShadingRasterization(DeviceExchange& Exchange, GlobalIllumination::ShaderInterchange& Shaders);
+    SolarDepthRasterization(DeviceExchange& Exchange, GlobalIllumination::ShaderInterchange& Shaders);
     void ConstructPrograms(const std::shared_ptr<DescriptorLayout>& Layout);
-    void ConstructTargets(uint32_t Width, uint32_t Height);
+    void ConstructTargets(uint32_t Extent);
     void Record(CommandSequence& Sequence, const std::shared_ptr<DescriptorGroup>& Group, const GlobalIllumination::SceneStructure& Scene,
-                const std::shared_ptr<DeviceRegion>& VertexRegion, const std::shared_ptr<DeviceRegion>& Instances,
-                const std::shared_ptr<DeviceTextureView>& Target);
-    std::array<uint32_t, 2>            Extent{0, 0};   // [px]
+                const std::shared_ptr<DeviceRegion>& VertexRegion, const std::shared_ptr<DeviceRegion>& Instances);
+    uint32_t                           Extent = 0;   // [texel]
     std::shared_ptr<DeviceTexture>     DepthTexture{};
     std::shared_ptr<DeviceTextureView> DepthView{};
   private:
     DeviceExchange&                        Exchange_;
     GlobalIllumination::ShaderInterchange& Shaders_;
-    std::shared_ptr<DeviceProgram>         SkyProgram_{}, SurfaceProgram_{};
+    std::shared_ptr<DeviceProgram>         Program_{};
 };
-} // namespace Frontier::AnalyticIllumination
+} // namespace Frontier::DirectShading
