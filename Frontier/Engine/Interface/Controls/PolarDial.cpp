@@ -102,4 +102,29 @@ bool PolarDial::Construct(ControlColumn& Column, const char* Id, double& InOutDe
     return Moved;
 }
 
+bool PolarDial::ConstructPanel(ControlColumn& Column, const char* Id, const char* Title, const char* Note, double& InOutDegrees,
+                               const char* Caption, bool Enabled, const char* Tooltip)
+{
+    const EditorTypefaces& Faces = Column.QueryFaces();
+    const float            S     = Column.QueryScale();
+    const float            Fade  = Enabled ? 1.0f : 0.42f;
+
+    if (Title != nullptr && Title[0] != '\0')
+    {
+        const ImVec2 TitleTop = Column.Space(12.0f * 1.3f, 0.0f, 2.0f);
+        (void)GlyphRun::Construct(Column, Faces.Medium, 12.0f * S,
+                                  ImVec2(TitleTop.x, GlyphRun::ResolveBaseline(TitleTop.y, 12.0f * S, 1.3f)),
+                                  FadeColour(ResolveCssColour(0xE4E4E4FF), Fade), Title);
+    }
+    const bool Moved = Construct(Column, Id, InOutDegrees, Caption, Enabled, Tooltip);
+    if (Note != nullptr && Note[0] != '\0')
+    {
+        const ImVec2 NoteTop = Column.Space(10.5f * 1.4f, 2.0f, 10.0f);
+        (void)GlyphRun::Construct(Column, Faces.Regular, 10.5f * S,
+                                  ImVec2(NoteTop.x, GlyphRun::ResolveBaseline(NoteTop.y, 10.5f * S, 1.4f)),
+                                  FadeColour(ResolveCssColour(0x757575FF), Fade), Note);
+    }
+    return Moved;
+}
+
 } // namespace Frontier

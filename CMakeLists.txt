@@ -171,6 +171,10 @@ add_library(FrontierSceneEditorUI STATIC
     Frontier/Engine/Interface/Controls/PolarDial.cpp
     Frontier/Engine/Interface/Controls/TimeSeries.cpp
     Frontier/Engine/Interface/Controls/HeroCard.cpp
+    Frontier/Engine/Interface/Controls/MetricTrio.cpp
+    Frontier/Engine/Interface/Controls/ColourRow.cpp
+    Frontier/Engine/Interface/Controls/SelectPill.cpp
+    Frontier/Engine/Interface/Controls/EmitterInstrument.cpp
     Frontier/Engine/Interface/Controls/PageHeading.cpp
     Frontier/Engine/Interface/Controls/RasterPlate.cpp
         Frontier/Engine/Interface/Controls/ActionRow.cpp

@@ -17,6 +17,10 @@ class PolarDial
     [[nodiscard]] static const char* ResolveCompassPoint(double Degrees) noexcept;
     [[nodiscard]] static bool        Construct(ControlColumn& Column, const char* Id, double& InOutDegrees, const char* Caption = nullptr,
                                                bool Enabled = true, const char* Tooltip = nullptr);
+    // 📝 Titled panel variant: 12 px title, the dial, and a single-line muted note. Returns true when dragged.
+    [[nodiscard]] static bool        ConstructPanel(ControlColumn& Column, const char* Id, const char* Title, const char* Note,
+                                                   double& InOutDegrees, const char* Caption = nullptr, bool Enabled = true,
+                                                   const char* Tooltip = nullptr);
 };
 
 } // namespace Frontier

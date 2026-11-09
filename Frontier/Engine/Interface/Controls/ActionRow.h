@@ -23,7 +23,16 @@ struct ActionItem
 {
     const char* Label;
     const char* Glyph; // 🧩 Studio glyph name or nullptr, e.g. "StudioFieldPlus".
-    ActionTone  Tone = ActionTone::Default;
+    ActionTone  Tone    = ActionTone::Default;
+    bool        Enabled = true;      // 📝 Per-action availability; false dims to 0.42 and never fires.
+    const char* Reason  = nullptr;   // 📝 Disabled tooltip.
+};
+
+// 📝 Charcoal: ForceField 32 px buttons, cream accent. Warm: Particle 34 px buttons, warm translucent accent.
+enum class ActionRowVoice
+{
+    Charcoal,
+    Warm
 };
 
 // 📝 Legacy intrinsic-width actions (pre-Remastered inspectors): kept alongside the Remastered overload.
@@ -51,7 +60,7 @@ class ActionRow
   public:
     // 📝 Returns the clicked action index, or -1 when nothing fired this frame.
     [[nodiscard]] static int Construct(ControlColumn& Column, const char* Id, const ActionItem* Actions, int Count, bool Enabled = true,
-                                       const char* Tooltip = nullptr);
+                                       const char* Tooltip = nullptr, ActionRowVoice Voice = ActionRowVoice::Charcoal);
     static int Construct(ControlColumn& Column, std::span<const ActionEntry> Entries, const ActionRowLook& Look = {});
 };
 

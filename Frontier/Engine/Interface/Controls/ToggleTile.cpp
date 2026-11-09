@@ -49,28 +49,30 @@ bool ToggleTile::ConstructGrid(ControlColumn& Column, const char* Id, ToggleTile
         const ImVec2 Min(Top.x + CellX * (Wide + Gap * S), Top.y + CellY * (TileTall * S + Gap * S));
         const ImVec2 Max(Min.x + Wide, Min.y + TileTall * S);
 
+        const float ItemFade = Fade * (Item.Enabled ? 1.0f : 0.42f);
         ImGui::SetCursorScreenPos(Min);
         ImGui::PushID(Index);
-        if (ImGui::InvisibleButton("##Tile", ImVec2(Wide, TileTall * S), ImGuiButtonFlags_EnableNav) && Enabled)
+        if (ImGui::InvisibleButton("##Tile", ImVec2(Wide, TileTall * S), ImGuiButtonFlags_EnableNav) && Enabled && Item.Enabled)
         {
             *Item.Value = !*Item.Value;
             Flipped     = true;
         }
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ControlColumn::ConstructTooltip(Tooltip);
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            ControlColumn::ConstructTooltip(!Item.Enabled && Item.Reason != nullptr ? Item.Reason : Tooltip);
         ImGui::PopID();
 
         const bool  On   = *Item.Value;
         const ImU32 Edge = On ? ResolveCssColour(0x3EC46D40) : ResolveCssColour(0xFFFFFF0F);
-        DrawList->AddRectFilled(Min, Max, FadeColour(ResolveCssColour(0x1A1A1AFF), Fade), 16.0f * S);
-        DrawList->AddRect(Min, Max, FadeColour(Edge, Fade), 16.0f * S, ImDrawFlags_None, S);
+        DrawList->AddRectFilled(Min, Max, FadeColour(ResolveCssColour(0x1A1A1AFF), ItemFade), 16.0f * S);
+        DrawList->AddRect(Min, Max, FadeColour(Edge, ItemFade), 16.0f * S, ImDrawFlags_None, S);
 
         const ImVec2 ChipMin(Min.x + 0.5f * (Wide - 28.0f * S), Min.y + 11.0f * S);
         DrawList->AddRectFilled(ChipMin, ImVec2(ChipMin.x + 28.0f * S, ChipMin.y + 28.0f * S),
-                                FadeColour(ResolveCssColour(On ? 0x285F3CFF : 0x272222FF), Fade), 10.0f * S);
+                                FadeColour(ResolveCssColour(On ? 0x285F3CFF : 0x272222FF), ItemFade), 10.0f * S);
         if (Item.Glyph != nullptr)
         {
             (void)GlyphSymbol::Construct(DrawList, Item.Glyph, ImVec2(ChipMin.x + 7.5f * S, ChipMin.y + 7.5f * S), 13.0f * S, 1.8f * S,
-                                         FadeColour(ResolveCssColour(On ? 0xD7F5E2FF : 0x9C8686FF), Fade));
+                                         FadeColour(ResolveCssColour(On ? 0xD7F5E2FF : 0x9C8686FF), ItemFade));
         }
         if (Item.Label != nullptr)
         {
@@ -78,14 +80,14 @@ bool ToggleTile::ConstructGrid(ControlColumn& Column, const char* Id, ToggleTile
             const float LabelTop  = ChipMin.y + 28.0f * S + 5.0f * S;
             (void)GlyphRun::Construct(Column, Faces.Regular, 10.5f * S,
                                       ImVec2(Min.x + 0.5f * (Wide - LabelWide), GlyphRun::ResolveBaseline(LabelTop, 10.5f * S, 1.4f)),
-                                      FadeColour(ResolveCssColour(0xCFCFCFFF), Fade), Item.Label);
+                                      FadeColour(ResolveCssColour(0xCFCFCFFF), ItemFade), Item.Label);
         }
         const char* StateText = On ? "ON" : "OFF";
         const float StateWide = GlyphRun::Measure(Column, Faces.Regular, 8.5f * S, StateText);
         const float StateTop  = ChipMin.y + 28.0f * S + 5.0f * S + 10.5f * 1.4f * S + 5.0f * S;
         (void)GlyphRun::Construct(Column, Faces.Regular, 8.5f * S,
                                   ImVec2(Min.x + 0.5f * (Wide - StateWide), GlyphRun::ResolveBaseline(StateTop, 8.5f * S, 1.4f)),
-                                  FadeColour(ResolveCssColour(On ? 0x83D6A1FF : 0x7A6F6FFF), Fade), StateText);
+                                  FadeColour(ResolveCssColour(On ? 0x83D6A1FF : 0x7A6F6FFF), ItemFade), StateText);
     }
     if (!Enabled) ImGui::EndDisabled();
     ImGui::PopID();
