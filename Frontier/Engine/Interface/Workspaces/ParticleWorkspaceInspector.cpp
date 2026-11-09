@@ -22,6 +22,7 @@
 #include "Engine/Interface/Controls/SegmentedRow.h"
 #include "Engine/Interface/Controls/SelectPill.h"
 #include "Engine/Interface/Controls/SliderPill.h"
+#include "Engine/Interface/Controls/SliderRow.h"
 #include "Engine/Interface/Controls/StatGrid.h"
 #include "Engine/Interface/Controls/SwitchPill.h"
 #include "Engine/Interface/Controls/TextRow.h"
@@ -243,19 +244,9 @@ void ConstructSourceTab(ParticleWorkspaceState& State, ControlColumn& Column, Pa
     }
 
     uint32_t Capacity = P.Capacity > 0 ? static_cast<uint32_t>(P.Capacity) : 0u;
-    // 📝 Capacity rides a raw uint32 binding (SliderRow::ConstructInteger); the shell mirrors it into the int32 field.
+    if (SliderRow::ConstructInteger(Column, "Capacity", "Capacity", Capacity, 0u, 16000u, "", Enabled))
     {
-        char Shown[32]{};
-        std::snprintf(Shown, sizeof(Shown), "%u", Capacity);
-        (void)Shown;
-    }
-    const uint32_t CapacityBefore = Capacity;
-    (void)CapacityBefore;
-    // 📝 Kept inline: borrow SliderRow's integer slider without pulling its float API into this TU's helpers.
-    extern bool ConstructCapacitySlider(ControlColumn & Column, const char* Id, uint32_t & Quantity);
-    if (ConstructCapacitySlider(Column, "Capacity", Capacity))
-    {
-        P.Capacity = static_cast<int32_t>(Capacity > 16000u ? 16000u : Capacity);
+        P.Capacity = static_cast<int32_t>(Capacity);
         char Figure[32]{};
         std::snprintf(Figure, sizeof(Figure), "%d", P.Capacity);
         LogParticleWorkspaceValue(State, "EFFECT", Effect.Name.c_str(), "Capacity", Figure);

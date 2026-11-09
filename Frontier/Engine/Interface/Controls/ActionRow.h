@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include <imgui.h>
+
 #include <span>
 
 namespace Frontier
