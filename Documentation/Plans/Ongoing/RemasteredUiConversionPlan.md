@@ -94,10 +94,18 @@ Rules for NOOP shells:
   pages) · 52-preset library list (read-only names from `.particlespace`) ·
   transport + Strike/Burst as explicit NOOPs. Sheets (library/export) live in
   child windows so their keys receive presses over the inspector child.
-- [ ] **U3. Fluid Workspace (Plume UI):** Outliner (gas domain, fire emitter, light) ·
-  stage grid decor · Inspector (Source/Simulation/Rendering tabs per
-  `Experimental/Fluid/src/FluidPanel.js`) · 18-preset list · Bake/Trigger as
-  explicit NOOPs.
+- [x] **U3. Fluid Workspace (Plume UI):** DONE 2026-11-09 — `Interface/Workspaces/FluidWorkspace`
+  (shell, catalogue, inspector TUs) + `FluidWorkspaceValidation` (boot/select/
+  tabs/transport/viewport/library/bake/topbar/outliner/tools/reset interaction
+  checks, 3-tab CPU-raster evidence
+  `Exhibits/FluidWorkspace/Images/Verified{Source,Simulation,Rendering}.png`).
+  Outliner (gas domain, fire emitter, sphere collider, directional light) ·
+  plume stage grid/bounds/marker decor · Inspector (Source/Simulation/Rendering
+  tabs per `Experimental/Fluid/src/FluidPanel.js`, 15 property-group cards) ·
+  18-preset library (search + fire/smoke/blast filters, read-only) · transport +
+  timeline + status bar (live voxel/bounds figures) · Bake/Trigger as explicit
+  NOOPs. Viewport bar uses icon-only keys with width-sharing selects so nothing
+  overlaps at narrow widths.
 - [ ] **U4. Fracture Workspace:** Outliner (celestials + destructible solids) · stage
   shard decor · Inspector (Overview/Physics/Bonds/SDF tabs) · solid/solver
   presets · Strike/Bake as explicit NOOPs.
