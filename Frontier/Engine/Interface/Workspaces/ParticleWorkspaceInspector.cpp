@@ -177,11 +177,12 @@ void ConstructOverviewTab(ParticleWorkspaceState& State, ControlColumn& Column, 
                                     { "Blend", Effect.Parameters.Blend == ParticleBlend::Additive ? "Additive" : "Alpha over" } };
     StatGrid::Construct(Column, Facts, 4, Effect.Enabled);
 
-    const ActionItem Actions[2] = { { "Reset effect", "StudioReset", ActionTone::Accent },
-                                    { "Copy settings", "StudioCopy", ActionTone::Default } };
-    ImVec4 ActionRects[2]{};
-    const int Fired = ActionRow::Construct(Column, "EffectActions", Actions, 2, Effect.Enabled, nullptr, ActionRowVoice::Warm, ActionRects);
-    for (int Index = 0; Index < 2; ++Index)
+    const ActionItem Actions[3] = { { "Reset effect", "StudioReset", ActionTone::Accent },
+                                    { "Copy settings", "StudioCopy", ActionTone::Default },
+                                    { "Remove", "StudioTrash", ActionTone::Danger } };
+    ImVec4 ActionRects[3]{};
+    const int Fired = ActionRow::Construct(Column, "EffectActions", Actions, 3, Effect.Enabled, nullptr, ActionRowVoice::Warm, ActionRects);
+    for (int Index = 0; Index < 3; ++Index)
     {
         char RectName[48]{};
         std::snprintf(RectName, sizeof(RectName), "Inspector/Effect/Action%d", Index);
