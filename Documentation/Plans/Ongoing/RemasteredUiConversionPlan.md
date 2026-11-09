@@ -84,10 +84,16 @@ Rules for NOOP shells:
   hardening (section-title ellipsis, SwitchPill caption wrap, SegmentedRow
   shrink-to-fit — U0 evidence pixel-identical) and a `TypefaceRegistry` fix that
   rasterizes Greek/math symbol ranges so ω/∇ labels render in production too.
-- [ ] **U2. Particle Workspace:** Outliner (environment/effects) · stage + probe/
-  legend/minimap slots · Inspector (effect header, Overview/Source/Motion/Modules
-  tabs) · 52-preset library list (read-only names from `.particlespace`) ·
-  transport + Strike/Burst as explicit NOOPs.
+- [x] **U2. Particle Workspace:** DONE 2026-11-09 — `Interface/Workspaces/ParticleWorkspace`
+  (shell, catalogue, inspector TUs) + `ParticleWorkspaceValidation` (boot/select/
+  tabs/transport-NOOP/log/mode/library/export/HUD/camera/minimap/orbit/reset
+  interaction checks, 5-page CPU-raster evidence
+  `Exhibits/ParticleWorkspace/Images/Verified{Effect,Modules,Scene,Wind,Force}.png`).
+  Outliner (environment/effects/forces) · stage + probe/legend/minimap slots ·
+  Inspector (effect header, Overview/Source/Motion/Modules tabs, scene/wind/force
+  pages) · 52-preset library list (read-only names from `.particlespace`) ·
+  transport + Strike/Burst as explicit NOOPs. Sheets (library/export) live in
+  child windows so their keys receive presses over the inspector child.
 - [ ] **U3. Fluid Workspace (Plume UI):** Outliner (gas domain, fire emitter, light) ·
   stage grid decor · Inspector (Source/Simulation/Rendering tabs per
   `Experimental/Fluid/src/FluidPanel.js`) · 18-preset list · Bake/Trigger as
