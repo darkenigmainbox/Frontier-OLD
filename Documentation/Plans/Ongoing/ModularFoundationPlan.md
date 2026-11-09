@@ -237,8 +237,9 @@ Rewrite and harden each foundational space and extension over Phases 1–2 (and 
 **Checkpoint (2026-11-09):** Added scalar `CurveProfile<double>` / `CurveSpace` evaluation (linear, clamped Hermite, and
 monotonic PCHIP), baked fixed-size LUTs, transactional validation, and `.curvespace` codec; its validation passes 26 checks.
 Added `VisualEffectProfile` / `EffectSpace` data, spatial/replication metadata, semantic checks, and `.effectspace` codec; its
-validation passes 19 checks. These are data foundations only—not complete integration into Physics/ForceField/Particle/Fluid,
-not the planned GPU `VisualEffects` sequence, and not editor UI. Authoring UI remains deferred.
+validation passes 19 checks. These remain data foundations only—not complete integration into Physics/ForceField/Particle/Fluid
+or the planned GPU `VisualEffects` sequence. The first shared `CurvePlot` UI control now precedes domain integration; full curve
+authoring remains deferred until the shared Editor foundation is complete.
 
 1. **Curve Engine & `.curvespace` Foundation (`Frontier/Engine/Foundation/Curves/`):**
    - **Note:** Engine/data/math layer only (ImGui curve-drawing UI waits for the post-foundation Editor phase).

@@ -52,8 +52,12 @@ Single progress and violation tracker. Detailed evidence belongs in Exhibits, no
   validated `.curvespace` serialization, and fixed-size baked LUTs. `CurveSpaceValidation` passes 26 checks with GCC 12.2.
 - Added the declarative `VisualEffectProfile`/`EffectSpace` `.effectspace` schema with spatial and replication profiles;
   `EffectSpaceValidation` passes 19 checks. This is not a GPU render sequence.
+- Started the shared UI-first slice with `Frontier/Engine/Interface/Controls/CurvePlot.{h,cpp}`. It previews live evaluations,
+  selects interpolation, and transactionally edits knots. Headless ImGui validation passed interactive drag and invalid-PCHIP
+  rejection; CPU-raster evidence is `Exhibits/Curves/Images/CurvePlot-CPU.png`. Domain-inspector integration and full editor parity
+  remain open.
 - **Still open:** CurveSpace consumers; the EffectSpace evaluation/render-target/GPU pipeline; the remaining 3.6 naming, gizmo, and
-  placement work; and a native/browser Fluid boundary. No curve editor UI or engine/editor Fluid integration is claimed.
+  placement work; and a native/browser Fluid boundary. No domain curve UI or engine/editor Fluid integration is claimed.
 
 ## EngineUpdate status
 

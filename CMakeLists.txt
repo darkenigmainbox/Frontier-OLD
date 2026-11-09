@@ -155,6 +155,7 @@ add_library(FrontierSceneEditorUI STATIC
     Frontier/Engine/Interface/Controls/GlyphSymbol.cpp
     Frontier/Engine/Interface/Controls/DiagramPen.cpp
     Frontier/Engine/Interface/Controls/DiagramCanvas.cpp
+    Frontier/Engine/Interface/Controls/CurvePlot.cpp
     Frontier/Engine/Interface/Controls/PageHeading.cpp
     Frontier/Engine/Interface/Controls/RasterPlate.cpp
         Frontier/Engine/Interface/Controls/ActionRow.cpp
