@@ -121,8 +121,19 @@ Rules for NOOP shells:
   NOOPs with latch flags. Closed-form estimators only: partition receipts, SDF
   footprints, Spencer/Kasten-Young solar ephemeris. Shard decor uses ABGR-high
   alpha fills (low-byte masks shift red, not alpha).
-- [ ] **U5. Photometric & Light Workspace (stretch):** only if time remains; lights
-  already have C++ inspectors, so this is lowest risk to defer.
+- [x] **U5. Photometric & Light Workspace (stretch):** DONE 2026-11-09 — rig tab bar
+  (4 scenarios reset rig+env, stage visibility/selection/camera) · luminaire +
+  environment outliner (search, eye keys, census 12.22 klm default) · quick
+  photometry chips · two-row lens/camera HUD + wall-lux telemetry (faithful
+  SampleStagePointLux mirror, R2>=0.25, IES screen-gain table) + isolux legend ·
+  luminaire stage (markers + spot/IES cones) · diurnal transport + scrubber +
+  console drawer (newest-first, 64 cap) · 8 light inspector pages (hero card +
+  readings rail + FLAGS + OUTPUT + response curve + OPTICS + WORLD SPACE) +
+  7 environment pages · IES goniometer matrix (15 tiles re-curve selected IES)
+  · add-light drawer (7 types, all refuse). NOOP audit: load/export .ies,
+  export rig, suite links, add/duplicate/delete. 14 validation groups green +
+  ctest; 4 evidence PNGs (overview/lux/gallery/lunar). Log is newest-first:
+  latest is front(), not back().
 
 Per-shell exit criteria: 1:1 checklist vs the Remastered screenshot + HTML/CSS
 tokens; CPU-raster evidence PNGs; headless interaction checks; NOOP audit list.
