@@ -14,6 +14,7 @@
 
 #include <imgui.h>
 
+#include <array>
 #include <cstdint>
 #include <deque>
 #include <map>
@@ -286,6 +287,9 @@ struct FractureWorkspaceState
 
     FractureWorkspaceConstruct Constructs[7];
     int                        ActiveConstruct = 0;
+    bool                       CubeComparisonOpen = true;
+    bool                       CubeComparisonReady = false;
+    std::array<Fracture::Result, 6> CubeComparisonResults{};
 
     FractureSunParams   Sun;
     FractureSunSolved   SunSolved;

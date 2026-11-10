@@ -416,6 +416,8 @@ void EncodeFractureToml(const FractureWorkspaceState& State, int Construct, char
 
 void ConstructFractureWorkspaceState(FractureWorkspaceState& State)
 {
+    State.CubeComparisonOpen = true;
+    State.CubeComparisonReady = false;
     for (int I = 0; I < FractureWorkspaceState::CardCount; ++I) State.OpenCards[I] = true;
     for (int I = 0; I < 7; ++I)
     {

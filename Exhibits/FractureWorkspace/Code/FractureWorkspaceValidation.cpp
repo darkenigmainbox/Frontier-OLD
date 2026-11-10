@@ -227,7 +227,23 @@ int main(int ArgumentCount, char** Arguments)
             Confirm(State.SunSolved.AirMass > 1.0 && State.SunSolved.AirMass < 3.0, "The air mass left its band");
         }
 
-        // 2. Outliner: constructs and celestials select silently and reset to Overview.
+        // 2. Side-by-side cube showcase: every native solver cuts the same cube, and selecting a tile loads that solver on the cube construct.
+        Confirm(State.CubeComparisonOpen && State.CubeComparisonReady,
+                "The workspace did not open directly into its cached cube solver comparison");
+        for (int Solver = 0; Solver < 6; ++Solver)
+        {
+            const Fracture::Result& Compared = State.CubeComparisonResults[Solver];
+            Confirm(Compared.Success && Compared.Fragments.size() >= 2,
+                    "A native solver failed to produce a fracture result in the cube comparison");
+        }
+        Click("CubeCompare/Griffith");
+        Confirm(!State.CubeComparisonOpen && State.ActiveConstruct == 5 && State.Selected == 5,
+                "Selecting a cube comparison tile did not transition to the cube construct");
+        Confirm(State.Constructs[5].Spec.Solver == 2, "The Griffith comparison tile did not load the Griffith solver");
+        Click("Outliner/Row0");
+        Confirm(State.ActiveConstruct == 0, "The cube comparison did not return to the monolith construct");
+
+        // 3. Outliner: constructs and celestials select silently and reset to Overview.
         Click("Outliner/Row1");
         Confirm(State.Selected == 1, "Clicking the glazing did not select it");
         Confirm(State.ActiveConstruct == 1, "Clicking the glazing did not activate it");
@@ -253,7 +269,7 @@ int main(int ArgumentCount, char** Arguments)
             Confirm(State.Constructs[0].BakedResident, "The monolith eye did not restore residency");
         }
 
-        // 3. Tabs: Overview / Physics / Bonds / SDF switch silently.
+        // 4. Tabs: Overview / Physics / Bonds / SDF switch silently.
         Click("Inspector/Tab1");
         Confirm(State.InspectorTab == 1, "Clicking Physics did not switch tabs");
         Click("Inspector/Tab2");
@@ -263,7 +279,7 @@ int main(int ArgumentCount, char** Arguments)
         Click("Inspector/Tab0");
         Confirm(State.InspectorTab == 0, "Clicking Overview did not switch back");
 
-        // 4. Transport: play bakes and advances Jolt; step advances physics; reset reassembles the body set.
+        // 5. Transport: play bakes and advances Jolt; step advances physics; reset reassembles the body set.
         {
             const double SimulatedBeforePlay = Runtime.QuerySimulatedSeconds();
             Click("Transport/Play");
@@ -296,7 +312,7 @@ int main(int ArgumentCount, char** Arguments)
         Click("Transport/Explode");
         Confirm(std::fabs(State.ExplodeAmount - 0.5) < 0.02, "The explode track missed its midpoint");
 
-        // 5. Bake and strike solve the current recipe and replace the isolated Jolt shard world.
+        // 6. Bake and strike solve the current recipe and replace the isolated Jolt shard world.
         {
             State.StrikeExecuted = false;
             Click("Transport/Strike");
@@ -321,12 +337,12 @@ int main(int ArgumentCount, char** Arguments)
                     "The stage strike did not refresh the Jolt bodies from its new solver result");
         }
 
-        // 6. Timeline: the ruler scrubs silently.
+        // 7. Timeline: the ruler scrubs silently.
         Click("Timeline/Ruler");
         Confirm(std::fabs(State.TimelineActive - 2.0) < 0.05, "The ruler scrub missed 2.0 s");
         Confirm(!State.TimelinePlaying, "Scrubbing left the clock playing");
 
-        // 7. Viewport bar: pipeline restages the recipe; lens/camera stay silent; focus/maximize NOOP.
+        // 8. Viewport bar: pipeline restages the recipe; lens/camera stay silent; focus/maximize NOOP.
         Click("Viewport/Pipeline");
         Click("Viewport/Pipeline/Option1");
         Confirm(State.Constructs[0].Pipeline == "baked", "Eng.Bake did not restage the pipeline");
@@ -352,7 +368,7 @@ int main(int ArgumentCount, char** Arguments)
         Click("Viewport/Maximize");
         Confirm(Toast::QueryVisible(), "Maximize raised no toast");
 
-        // 8. Stage tools switch silently; reassemble bakes the selected recipe and restores one Jolt body.
+        // 9. Stage tools switch silently; reassemble bakes the selected recipe and restores one Jolt body.
         {
             const size_t LogSize = State.Log.size();
             Click("Surface/Tool1");
@@ -369,7 +385,7 @@ int main(int ArgumentCount, char** Arguments)
                     "The stage reassemble control did not restore the intact Jolt body");
         }
 
-        // 9. Library: browsing delegates to the shared Asset Browser; handoffs spawn-refuse/select/apply.
+        // 10. Library: browsing delegates to the shared Asset Browser; handoffs spawn-refuse/select/apply.
         Click("Library/Browse");
         Confirm(Link.OpenRequested, "The browse row did not request the browser");
         Confirm(Link.OpenWorkspace == AssetBrowserWorkspaceFracture, "The browse row requested the wrong workspace");
@@ -474,6 +490,9 @@ int main(int ArgumentCount, char** Arguments)
             const size_t Dot = Stem.rfind(".ppm");
             if (Dot != std::string::npos && Dot + 4 == Stem.size()) Stem.erase(Dot);
             Click("Outliner/Row0");
+            Click("Footer/CubeCompare");
+            RenderEvidence((Stem + "-cube-comparison.ppm").c_str());
+            Click("Footer/CubeCompare");
             Click("Inspector/Tab0");
             Click("Transport/Reset");
             Click("Transport/Bake");
@@ -494,7 +513,7 @@ int main(int ArgumentCount, char** Arguments)
             RenderEvidence((Stem + "-sdf.ppm").c_str());
         }
 
-        std::fprintf(stdout, "FractureWorkspaceValidation: boot/select/tabs/transport/strike-bake/timeline/viewport/tools/library/topbar/matrix/reset/celestial checks passed\n");
+        std::fprintf(stdout, "FractureWorkspaceValidation: boot/select/cube-solver-comparison/tabs/transport/strike-bake/timeline/viewport/tools/library/topbar/matrix/reset/celestial checks passed\n");
         ImGui::DestroyContext();
         return 0;
     }

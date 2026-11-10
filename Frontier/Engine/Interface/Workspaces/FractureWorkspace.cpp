@@ -823,11 +823,14 @@ void ConstructViewportBar(FractureWorkspaceState& State, const EditorTypefaces& 
 
     DrawList->AddCircleFilled(ImVec2(Min.x + 20.0f, MidY), 4.0f, ResolveCssColour(0x7FD08AFF), 12);
     Bar.Text(Faces.SemiBold, 10.0f, Min.x + 30.0f, MidY - 14.0f, 1.4f, ResolveCssColour(0x7FD08AFF), "LIVE", 0.9f);
-    Bar.Text(Faces.Medium, 12.5f, Min.x + 30.0f, MidY - 2.0f, 1.35f, ResolveCssColour(0xEFEFEFFF),
-             Cst.Title.c_str());
+    const char* ViewTitle = State.CubeComparisonOpen ? "Cube Solver Comparison" : Cst.Title.c_str();
+    Bar.Text(Faces.Medium, 12.5f, Min.x + 30.0f, MidY - 2.0f, 1.35f, ResolveCssColour(0xEFEFEFFF), ViewTitle);
     char Sub[128]{};
-    std::snprintf(Sub, sizeof(Sub), "%s · %s", QueryFractureMaterial(Cst.Spec.Material).Label,
-                  QueryFractureSolver(Cst.Spec.Solver).Id);
+    if (State.CubeComparisonOpen)
+        std::snprintf(Sub, sizeof(Sub), "same concrete cube · six native algorithms");
+    else
+        std::snprintf(Sub, sizeof(Sub), "%s · %s", QueryFractureMaterial(Cst.Spec.Material).Label,
+                      QueryFractureSolver(Cst.Spec.Solver).Id);
     const float SubWide = Bar.Measure(Faces.Regular, 10.5f, Sub);
 
     static const char* Pipes[3] = { "Realtime", "Eng.Bake", "Hybrid Bonds" };
@@ -864,14 +867,157 @@ void ConstructViewportBar(FractureWorkspaceState& State, const EditorTypefaces& 
         Cst.Spec.Solver = Pipe == 0 ? 0 : (Pipe == 1 ? 1 : Cst.Spec.Solver);
         RecomputeFractureReceipt(Cst);
     }
-    Bar.Text(Faces.Regular, 10.5f, Min.x + 30.0f + Bar.Measure(Faces.Medium, 12.5f, Cst.Title.c_str()) + 10.0f,
-             MidY - 2.0f, 1.4f, ResolveCssColour(0x848484FF), Sub);
+    if (!State.CubeComparisonOpen)
+        Bar.Text(Faces.Regular, 10.5f, Min.x + 30.0f + Bar.Measure(Faces.Medium, 12.5f, ViewTitle) + 10.0f,
+                 MidY - 2.0f, 1.4f, ResolveCssColour(0x848484FF), Sub);
     (void)SubWide;
+}
+
+void EnsureCubeComparison(FractureWorkspaceState& State)
+{
+    if (State.CubeComparisonReady) return;
+    const Fracture::Polyhedron Cube = Fracture::ConstructSolid(Fracture::SolidKind::Cube, {1.0, 1.0, 1.0}, 42u);
+    const Fracture::Material Concrete = Fracture::ResolveMaterial(Fracture::MaterialKind::Concrete);
+    for (int Solver = 0; Solver < 6; ++Solver)
+    {
+        Fracture::Request Request;
+        Request.Algorithm = static_cast<Fracture::Solver>(Solver);
+        Request.EnergyJoules = 3900.0;
+        Request.MinimumPieceSizeMetres = 0.045;
+        Request.Seed = 42u;
+        Request.FragmentCeiling = 24u;
+        Request.ImpactPointMetres = {0.12, -0.18, 0.47};
+        Request.ImpactNormal = {0.0, 0.0, -1.0};
+        State.CubeComparisonResults[Solver] = Fracture::Execute(Cube, Request, Concrete);
+    }
+    State.CubeComparisonReady = true;
+}
+
+std::vector<ImVec2> ResolveProjectedHull(const std::vector<ImVec2>& Points)
+{
+    if (Points.size() < 3) return Points;
+    std::vector<ImVec2> Sorted = Points;
+    std::sort(Sorted.begin(), Sorted.end(), [](const ImVec2& A, const ImVec2& B) {
+        return A.x == B.x ? A.y < B.y : A.x < B.x;
+    });
+    std::vector<ImVec2> Hull;
+    Hull.reserve(Sorted.size() * 2);
+    auto Cross = [](const ImVec2& O, const ImVec2& A, const ImVec2& B) {
+        return (A.x - O.x) * (B.y - O.y) - (A.y - O.y) * (B.x - O.x);
+    };
+    for (const ImVec2& Point : Sorted)
+    {
+        while (Hull.size() >= 2 && Cross(Hull[Hull.size() - 2], Hull.back(), Point) <= 0.01f) Hull.pop_back();
+        Hull.push_back(Point);
+    }
+    const size_t Lower = Hull.size();
+    for (auto Point = Sorted.rbegin() + 1; Point != Sorted.rend(); ++Point)
+    {
+        while (Hull.size() > Lower && Cross(Hull[Hull.size() - 2], Hull.back(), *Point) <= 0.01f) Hull.pop_back();
+        Hull.push_back(*Point);
+    }
+    if (!Hull.empty()) Hull.pop_back();
+    return Hull;
+}
+
+void ConstructCubeComparisonStage(FractureWorkspaceState& State, const EditorTypefaces& Faces, ImDrawList* DrawList,
+                                  ImVec2 Min, ImVec2 Max)
+{
+    EnsureCubeComparison(State);
+    DrawList->AddRectFilled(Min, Max, ResolveCssColour(0x0B0B0BFF));
+    const float Gap = 8.0f;
+    const float CellWidth = (Max.x - Min.x - Gap * 4.0f) / 3.0f;
+    const float CellHeight = (Max.y - Min.y - Gap * 3.0f) / 2.0f;
+    const ImU32 Palette[6] = {ResolveCssColour(0xE8C27AFF), ResolveCssColour(0x7FB6E8FF), ResolveCssColour(0xD78FE8FF),
+                              ResolveCssColour(0x70D1A3FF), ResolveCssColour(0xE88666FF), ResolveCssColour(0x9BB0C7FF)};
+    DrawList->PushClipRect(Min, Max, true);
+    for (int Solver = 0; Solver < 6; ++Solver)
+    {
+        const int Column = Solver % 3;
+        const int Row = Solver / 3;
+        const ImVec2 CellMin(Min.x + Gap + Column * (CellWidth + Gap), Min.y + Gap + Row * (CellHeight + Gap));
+        const ImVec2 CellMax(CellMin.x + CellWidth, CellMin.y + CellHeight);
+        const Fracture::Result& Result = State.CubeComparisonResults[Solver];
+        DrawList->AddRectFilled(CellMin, CellMax, ResolveCssColour(0x12161BFF), 8.0f);
+        DrawList->AddRect(CellMin, CellMax, ResolveCssColour(0xFFFFFF1C), 8.0f);
+        PanelCursor Text{DrawList, &Faces, 1.0f, CellMin.x, CellWidth, CellMin.y};
+        const char* Name = QueryFractureSolver(Solver).Name;
+        Text.Text(Faces.SemiBold, 11.0f, CellMin.x + 9.0f, CellMin.y + 8.0f, 1.3f, ResolveCssColour(0xEFEFEFFF), Name);
+        char Count[64]{};
+        std::snprintf(Count, sizeof(Count), "%d shards", Result.Success ? static_cast<int>(Result.Fragments.size()) : 0);
+        Text.Text(Faces.Regular, 9.0f, CellMin.x + 9.0f, CellMin.y + 25.0f, 1.4f,
+                  ResolveCssColour(Result.Success ? 0x9A9A9AFF : 0xE88666FF), Result.Success ? Count : "solver failed");
+        if (Result.Success)
+        {
+            struct ProjectedShard { std::vector<ImVec2> Hull; double Depth = 0.0; uint32_t Index = 0; };
+            std::vector<ProjectedShard> Shards;
+            Shards.reserve(Result.Fragments.size());
+            const double Scale = std::min(static_cast<double>(CellWidth * 0.23f), static_cast<double>(CellHeight * 0.34f));
+            const double CentreX = 0.5 * (CellMin.x + CellMax.x);
+            const double CentreY = CellMin.y + CellHeight * 0.61f;
+            for (const Fracture::Fragment& Fragment : Result.Fragments)
+            {
+                Fracture::Vec3 Radial{Fragment.ShapeMetrics.Centroid[0], Fragment.ShapeMetrics.Centroid[1], Fragment.ShapeMetrics.Centroid[2]};
+                const double Length = std::max(1.0e-8, std::sqrt(Radial[0] * Radial[0] + Radial[1] * Radial[1] + Radial[2] * Radial[2]));
+                for (double& Component : Radial) Component /= Length;
+                const double Scatter = 0.10 + 0.035 * static_cast<double>(Fragment.Index % 4u);
+                std::vector<ImVec2> Points;
+                Points.reserve(Fragment.Shape.Vertices.size());
+                for (const Fracture::Vec3& Vertex : Fragment.Shape.Vertices)
+                {
+                    const double X = Vertex[0] + Radial[0] * Scatter;
+                    const double Y = Vertex[1] + Radial[1] * Scatter;
+                    const double Z = Vertex[2] + Radial[2] * Scatter;
+                    Points.emplace_back(static_cast<float>(CentreX + (X - Y) * 0.70710678 * Scale),
+                                        static_cast<float>(CentreY - (Z + (X + Y) * 0.28) * Scale));
+                }
+                ProjectedShard Shard;
+                Shard.Hull = ResolveProjectedHull(Points);
+                Shard.Depth = Fragment.ShapeMetrics.Centroid[0] + Fragment.ShapeMetrics.Centroid[1] + Fragment.ShapeMetrics.Centroid[2];
+                Shard.Index = Fragment.Index;
+                if (Shard.Hull.size() >= 3) Shards.push_back(std::move(Shard));
+            }
+            std::stable_sort(Shards.begin(), Shards.end(), [](const ProjectedShard& A, const ProjectedShard& B) { return A.Depth < B.Depth; });
+            for (const ProjectedShard& Shard : Shards)
+            {
+                const ImU32 Fill = (Palette[Solver] & 0x00FFFFFFu) | ((0xA0u + (Shard.Index % 4u) * 12u) << 24u);
+                DrawList->AddConvexPolyFilled(Shard.Hull.data(), static_cast<int>(Shard.Hull.size()), Fill);
+                DrawList->AddPolyline(Shard.Hull.data(), static_cast<int>(Shard.Hull.size()), ResolveCssColour(0x101317FF),
+                                      ImDrawFlags_Closed, 1.1f);
+            }
+        }
+        ImGui::PushID(9200 + Solver);
+        const char* Tag = Solver == 0 ? "CubeCompare/Runtime" : Solver == 1 ? "CubeCompare/Engineering" : Solver == 2 ? "CubeCompare/Griffith"
+                            : Solver == 3 ? "CubeCompare/Wavefront" : Solver == 4 ? "CubeCompare/Voronoi" : "CubeCompare/Dendritic";
+        RecordRect(State, Tag, CellMin, CellMax);
+        if (InvisibleRect("##SelectSolver", CellMin, CellMax))
+        {
+            FractureWorkspaceConstruct& Cube = State.Constructs[5];
+            Cube.Spec = QueryFractureConstructSeedSpec(5);
+            Cube.Spec.Solver = Solver;
+            State.Selected = State.ActiveConstruct = 5;
+            State.CubeComparisonOpen = false;
+            RecomputeFractureReceipt(Cube);
+            char Message[128]{};
+            std::snprintf(Message, sizeof(Message), "Selected %s on the comparison cube", Name);
+            AppendFractureWorkspaceLog(State, "SOLVER", Message);
+        }
+        ImGui::PopID();
+    }
+    DrawList->PopClipRect();
+    PanelCursor Footer{DrawList, &Faces, 1.0f, Min.x, Max.x - Min.x, Max.y};
+    Footer.Text(Faces.Regular, 9.5f, Min.x + 10.0f, Max.y - 18.0f, 1.3f, ResolveCssColour(0xBCBCBCFF),
+                "Cube fracture comparison · select a tile to continue with that native solver");
 }
 
 void ConstructShardStage(FractureWorkspaceState& State, const EditorTypefaces& Faces, ImDrawList* DrawList, ImVec2 Min,
                          ImVec2 Max)
 {
+    if (State.CubeComparisonOpen)
+    {
+        ConstructCubeComparisonStage(State, Faces, DrawList, Min, Max);
+        return;
+    }
     PanelCursor Surface{ DrawList, &Faces, 1.0f, Min.x, Max.x - Min.x, Min.y };
     const float Wide    = Max.x - Min.x;
     const float Tall    = Max.y - Min.y;
@@ -1626,8 +1772,19 @@ void ConstructFractureWorkspace(FractureWorkspaceState& State, const EditorTypef
     DrawList->AddLine(ImVec2(CentreMin.x, FootY), ImVec2(ViewportMax.x, FootY), ResolveCssColour(0xFFFFFF12));
     PanelCursor FootCursor{ DrawList, &Faces, 1.0f, CentreMin.x, ViewportMax.x - CentreMin.x, FootY };
     FootCursor.Text(Faces.Regular, 10.5f, CentreMin.x + 14.0f, FootY + 15.0f - 0.5f * 10.5f * 1.4f, 1.4f,
-                    ResolveCssColour(0x848484FF),
-                    "Native solver output · convex shards and live Jolt poses");
+                    ResolveCssColour(0x848484FF), State.CubeComparisonOpen ? "Select a solver tile to load it on the cube construct"
+                                                                              : "Native solver output · convex shards and live Jolt poses");
+    const char* CompareLabel = State.CubeComparisonOpen ? "Close cube comparison" : "Compare 6 cube solvers";
+    PanelCursor CompareText{DrawList, &Faces, 1.0f, CentreMin.x, ViewportMax.x - CentreMin.x, FootY};
+    const float CompareWide = CompareText.Measure(Faces.Medium, 10.0f, CompareLabel) + 20.0f;
+    const ImVec2 CompareMax(ViewportMax.x - 14.0f, FootY + 26.0f);
+    const ImVec2 CompareMin(CompareMax.x - CompareWide, FootY + 4.0f);
+    DrawList->AddRectFilled(CompareMin, CompareMax, ResolveCssColour(State.CubeComparisonOpen ? 0xE8C27A30 : 0x1A1A1AFF), 9.0f);
+    DrawList->AddRect(CompareMin, CompareMax, ResolveCssColour(0xFFFFFF20), 9.0f);
+    CompareText.Text(Faces.Medium, 10.0f, CompareMin.x + 10.0f, FootY + 15.0f - 7.0f, 1.35f,
+                     ResolveCssColour(State.CubeComparisonOpen ? 0xE8C27AFF : 0xBCBCBCFF), CompareLabel);
+    RecordFractureWorkspaceRect(State, "Footer/CubeCompare", CompareMin, CompareMax);
+    if (InvisibleRect("##CubeCompare", CompareMin, CompareMax)) State.CubeComparisonOpen = !State.CubeComparisonOpen;
     const float LogPillWide = FootCursor.Measure(Faces.Medium, 11.0f, "Log Stream") + 18.0f;
     const ImVec2 LogPillMax(ViewportMax.x - 14.0f, FootY + 26.0f);
     const ImVec2 LogPillMin(LogPillMax.x - LogPillWide, FootY + 4.0f);
