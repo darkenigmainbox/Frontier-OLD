@@ -15,6 +15,8 @@
 
 #pragma once
 
+#include "Frontier/Engine/Interface/Workspaces/AssetBrowserWorkspace.h"
+
 #include <imgui.h>
 
 #include <deque>
@@ -179,14 +181,6 @@ struct FluidWorkspaceState
 
     enum
     {
-        FilterAll = 0,
-        FilterFire,
-        FilterSmoke,
-        FilterBlast
-    };
-
-    enum
-    {
         SceneFilterAll = 0,
         SceneFilterGas,
         SceneFilterGeometry,
@@ -237,8 +231,6 @@ struct FluidWorkspaceState
 
     std::string OutlinerQuery;
     int         SceneFilter = SceneFilterAll;
-    std::string LibraryQuery;
-    int         LibraryFilter = FilterAll;
     bool        LogOpen       = false;
 
     std::deque<FluidWorkspaceLogEntry> Log;
@@ -260,7 +252,9 @@ void        FormatFluidVoxels(int Grid, char* Text, size_t TextSize) noexcept;  
 void        FormatFluidBounds(double Width, double Height, char* Text, size_t TextSize) noexcept; // 🧩 "1.9 × 2.1 × 1.9 m".
 [[nodiscard]] bool QueryFluidWorkspaceRect(const FluidWorkspaceState& State, const char* Name, ImVec2& Min, ImVec2& Max) noexcept;
 
-void ConstructFluidWorkspace(FluidWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Size);
+void ApplyFluidWorkspaceLink(FluidWorkspaceState& State, AssetBrowserLink* Link); // 🧩 fluid/<id> → old card refusal.
+void ConstructFluidWorkspace(FluidWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Size,
+                             AssetBrowserLink* Link = nullptr);
 
 class ControlColumn;
 void ConstructFluidWorkspaceInspector(FluidWorkspaceState& State, const EditorTypefaces& Faces, ControlColumn& Column);

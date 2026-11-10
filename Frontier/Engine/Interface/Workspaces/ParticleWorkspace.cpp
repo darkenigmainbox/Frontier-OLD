@@ -1138,7 +1138,8 @@ void ConstructLogDrawer(ParticleWorkspaceState& State, const EditorTypefaces& Fa
 //                                                    LIBRARY SHEET
 //------------------------------------------------------------------------------------------------------------------------
 
-void ConstructLibrarySheet(ParticleWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 RootMin, ImVec2 RootMax)
+void ConstructLibrarySheet(ParticleWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 RootMin, ImVec2 RootMax,
+                         AssetBrowserLink* Link)
 {
     if (!State.LibraryOpen) return;
     ImDrawList* const DrawList = ImGui::GetWindowDrawList();
@@ -1174,100 +1175,34 @@ void ConstructLibrarySheet(ParticleWorkspaceState& State, const EditorTypefaces&
     RecordRect(State, "Library/Close", CloseMin, CloseMax);
     if (InvisibleRect("##LibraryClose", CloseMin, CloseMax)) CloseClicked = true;
     const ImVec2 Sub = Sheet.Space(16.0f, 0.0f, 10.0f);
-    Sheet.Text(Faces.Regular, 11.0f, Sub.x, Sub.y, 1.4f, ResolveCssColour(0x848484FF), "52 read-only presets · staged from the lab scene");
+    Sheet.Text(Faces.Regular, 11.0f, Sub.x, Sub.y, 1.4f, ResolveCssColour(0x848484FF), "Preset browsing moved to the shared Asset Browser");
 
     ImDrawList* const InnerList = SheetList;
     PanelCursor       Content{ InnerList, &Faces, 1.0f, SheetMin.x + 20.0f, SheetWide - 40.0f, Sheet.Y };
 
-    const int Columns = std::max(1, static_cast<int>((Content.Width + 9.0f) / (248.0f + 9.0f)));
-    const float CardWide = (Content.Width - (Columns - 1) * 9.0f) / Columns;
-    constexpr float CardTall = 112.0f;
-    const char* GroupOrder[14]{};
-    int         GroupCount = 0;
-    for (int Index = 0; Index < QueryParticlePresetCount(); ++Index)
+    // 📝 The 52-card gallery moved out to the shared Asset Browser; the sheet keeps its chrome and hands off.
     {
-        const char* Group = QueryParticlePreset(Index).Group;
-        bool Known = false;
-        for (int Known0 = 0; Known0 < GroupCount; ++Known0)
+        const ImVec2 Browse = Content.Space(64.0f, 8.0f, 0.0f);
+        const ImVec2 BrowseMin(Browse.x, Browse.y);
+        const ImVec2 BrowseMax(Browse.x + Content.Width, Browse.y + 64.0f);
+        InnerList->AddRectFilled(BrowseMin, BrowseMax, ResolveCssColour(0x1A1A1AFF), 16.0f);
+        InnerList->AddRect(BrowseMin, BrowseMax, ResolveCssColour(0xE8C27A66), 16.0f, ImDrawFlags_None, 1.0f);
+        Content.Text(Faces.Medium, 13.0f, BrowseMin.x + 16.0f, BrowseMin.y + 10.0f, 1.3f,
+                     ResolveCssColour(0xE8C27AFF), "Browse particle presets\u2026");
+        Content.Text(Faces.Regular, 10.5f, BrowseMin.x + 16.0f, BrowseMin.y + 34.0f, 1.4f,
+                     ResolveCssColour(0x848484FF), "52 presets \u00B7 opens the shared Asset Browser");
+        Content.Text(Faces.Medium, 14.0f, BrowseMax.x - 34.0f, BrowseMin.y + 20.0f, 1.3f,
+                     ResolveCssColour(0xE8C27AFF), "\u2197");
+        RecordRect(State, "Library/Browse", BrowseMin, BrowseMax);
+        if (InvisibleRect("##LibraryBrowse", BrowseMin, BrowseMax))
         {
-            if (std::strcmp(GroupOrder[Known0], Group) == 0) Known = true;
-        }
-        if (!Known && GroupCount < 14) GroupOrder[GroupCount++] = Group;
-    }
-    for (int Group = 0; Group < GroupCount; ++Group)
-    {
-        const ImVec2 Title = Content.Space(16.0f, Group == 0 ? 0.0f : 12.0f, 6.0f);
-        Content.Text(Faces.SemiBold, 10.0f, Title.x, Title.y, 1.4f, ResolveCssColour(0x707070FF), GroupOrder[Group], 0.9f);
-        int InGroup = 0;
-        for (int Index = 0; Index < QueryParticlePresetCount(); ++Index)
-        {
-            if (std::strcmp(QueryParticlePreset(Index).Group, GroupOrder[Group]) == 0) ++InGroup;
-        }
-        const int Rows = (InGroup + Columns - 1) / Columns;
-        const ImVec2 Grid = Content.Space(Rows * CardTall + (Rows - 1) * 9.0f, 0.0f, 0.0f);
-        int Placed = 0;
-        for (int Index = 0; Index < QueryParticlePresetCount(); ++Index)
-        {
-            const ParticleWorkspacePreset& Info = QueryParticlePreset(Index);
-            if (std::strcmp(Info.Group, GroupOrder[Group]) != 0) continue;
-            const int CellX = Placed % Columns;
-            const int CellY = Placed / Columns;
-            const ImVec2 CardMin(Grid.x + CellX * (CardWide + 9.0f), Grid.y + CellY * (CardTall + 9.0f));
-            const ImVec2 CardMax(CardMin.x + CardWide, CardMin.y + CardTall);
-            const int CardVerts = InnerList->VtxBuffer.Size;
-            InnerList->AddRectFilled(CardMin, CardMax, ResolveCssColour(0x212121FF), 18.0f);
-            ImGui::ShadeVertsLinearColorGradientKeepAlpha(InnerList, CardVerts, InnerList->VtxBuffer.Size, CardMin, CardMax,
-                                                          ResolveCssColour(0x212121FF), ResolveCssColour(0x191919FF));
-            InnerList->AddRect(CardMin, CardMax, ResolveCssColour(0xFFFFFF11), 18.0f, ImDrawFlags_None, 1.0f);
-            const ImVec2 SwatchMin(CardMin.x + 12.0f, CardMin.y + 12.0f);
-            InnerList->AddRectFilled(SwatchMin, ImVec2(SwatchMin.x + 24.0f, SwatchMin.y + 24.0f),
-                                     ResolveCssColour((Info.Colour & 0xFFFFFF00) | 0x20), 8.0f);
-            (void)GlyphSymbol::Construct(InnerList, Info.Glyph, ImVec2(SwatchMin.x + 6.0f, SwatchMin.y + 6.0f), 12.0f, 1.8f,
-                                         ResolveCssColour(Info.Colour));
-            Content.Text(Faces.Medium, 12.5f, SwatchMin.x + 32.0f, CardMin.y + 13.0f, 1.3f, ResolveCssColour(0xEFEFEFFF), Info.Name);
-            char MetaLine[64]{};
-            std::snprintf(MetaLine, sizeof(MetaLine), "%s", QueryParticleBehaviourName(Info.Behaviour));
-            const float MetaWide = Content.Measure(Faces.Regular, 9.5f, MetaLine);
-            Content.Text(Faces.Regular, 9.5f, CardMax.x - 12.0f - MetaWide, CardMin.y + 16.0f, 1.4f, ResolveCssColour(0x848484FF),
-                         MetaLine);
-            InnerList->PushClipRect(ImVec2(CardMin.x + 12.0f, CardMin.y + 44.0f), ImVec2(CardMax.x - 12.0f, CardMax.y - 10.0f), true);
-            float BlurbY = CardMin.y + 44.0f;
-            const char* Blurb = Info.Blurb;
-            int BlurbLines = 0;
-            while (Blurb != nullptr && Blurb[0] != '\0' && BlurbLines < 3)
+            if (Link != nullptr)
             {
-                size_t Take = std::strlen(Blurb);
-                char Line[128]{};
-                for (size_t Cut = Take; Cut > 0; --Cut)
-                {
-                    std::snprintf(Line, sizeof(Line), "%.*s", static_cast<int>(Cut), Blurb);
-                    if (Content.Measure(Faces.Regular, 10.5f, Line) <= CardWide - 24.0f || Cut <= 24)
-                    {
-                        Take = Cut;
-                        break;
-                    }
-                }
-                std::snprintf(Line, sizeof(Line), "%.*s", static_cast<int>(Take), Blurb);
-                Content.Text(Faces.Regular, 10.5f, CardMin.x + 12.0f, BlurbY, 1.4f, ResolveCssColour(0x7C7C7CFF), Line);
-                Blurb += Take;
-                while (Blurb[0] == ' ') ++Blurb;
-                BlurbY += 10.5f * 1.4f;
-                ++BlurbLines;
+                Link->OpenRequested = true;
+                Link->OpenWorkspace = AssetBrowserWorkspaceParticle;
             }
-            InnerList->PopClipRect();
-            ImGui::PushID(Index);
-            char RectName[48]{};
-            std::snprintf(RectName, sizeof(RectName), "Library/Card%d", Index);
-            RecordRect(State, RectName, CardMin, CardMax);
-            if (InvisibleRect("##LibraryCard", CardMin, CardMax))
-            {
-                // 📝 Read-only names: picking a card refuses (the scene keeps its four lab effects).
-                char Message[128]{};
-                std::snprintf(Message, sizeof(Message), "Add %s refused", Info.Name);
-                NoopParticleWorkspaceCommand(State, "LIBRARY", Message, "The library is read-only in this shell");
-            }
-            ImGui::PopID();
-            ++Placed;
+            else Toast::Show("The Asset Browser is not attached in this shell.");
+            State.LibraryOpen = false;
         }
     }
 
@@ -1396,8 +1331,28 @@ void ConstructExportDialog(ParticleWorkspaceState& State, const EditorTypefaces&
 //                                                    ROOT
 //------------------------------------------------------------------------------------------------------------------------
 
-void ConstructParticleWorkspace(ParticleWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Size)
+void ApplyParticleWorkspaceLink(ParticleWorkspaceState& State, AssetBrowserLink* Link)
 {
+    if (Link == nullptr || !Link->HasHandoff() || Link->OpenRecordWorkspace != AssetBrowserWorkspaceParticle) return;
+    static constexpr const char* Prefix  = "particle/";
+    const char*                  Raw     = Link->OpenRecordId;
+    const char*                  Display = Raw;
+    if (std::strncmp(Raw, Prefix, std::strlen(Prefix)) == 0)
+    {
+        const int Preset = QueryParticlePresetById(Raw + std::strlen(Prefix));
+        if (Preset >= 0) Display = QueryParticlePreset(Preset).Name;
+    }
+    // 📝 Read-only names: the handoff refuses exactly like the old library card did.
+    char Message[192]{};
+    std::snprintf(Message, sizeof(Message), "Add %s refused", Display);
+    NoopParticleWorkspaceCommand(State, "LIBRARY", Message, "The library is read-only in this shell");
+    Link->ClearHandoff();
+}
+
+void ConstructParticleWorkspace(ParticleWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Size,
+                                AssetBrowserLink* Link)
+{
+    ApplyParticleWorkspaceLink(State, Link);
     State.Rects.clear();
     // 📝 The clock never advances: transport is a literal NOOP and the playhead stays frozen at zero.
 
@@ -1500,7 +1455,7 @@ void ConstructParticleWorkspace(ParticleWorkspaceState& State, const EditorTypef
     ImGui::EndChild();
     ImGui::PopStyleColor();
 
-    ConstructLibrarySheet(State, Faces, ImVec2(0.0f, 0.0f), Size);
+    ConstructLibrarySheet(State, Faces, ImVec2(0.0f, 0.0f), Size, Link);
     ConstructExportDialog(State, Faces, ImVec2(0.0f, 0.0f), Size);
     Toast::Construct();
     ImGui::End();

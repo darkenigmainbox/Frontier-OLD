@@ -1286,7 +1286,8 @@ void ConstructLogDrawer(ForceFieldWorkspaceState& State, const EditorTypefaces& 
     ImGui::PopID();
 }
 
-void ConstructLibrarySheet(ForceFieldWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 RootMin, ImVec2 RootMax)
+void ConstructLibrarySheet(ForceFieldWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 RootMin, ImVec2 RootMax,
+                         AssetBrowserLink* Link)
 {
     if (!State.LibraryOpen) return;
     ImDrawList* const DrawList = ImGui::GetWindowDrawList();
@@ -1322,92 +1323,29 @@ void ConstructLibrarySheet(ForceFieldWorkspaceState& State, const EditorTypeface
     ImDrawList* const InnerList = ImGui::GetWindowDrawList();
     PanelCursor       Content{ InnerList, &Faces, 1.0f, SheetMin.x + 20.0f, SheetWide - 40.0f, Sheet.Y };
 
-    const int Columns = std::max(1, static_cast<int>((Content.Width + 9.0f) / (202.0f + 9.0f)));
-    const float CardWide = (Content.Width - (Columns - 1) * 9.0f) / Columns;
-    constexpr float CardTall = 108.0f;
-    int             CardOrdinal = 0;
-    const char* GroupTitles[3] = { "Flow · m/s (Finite Spatial Influence)", "Accelerate · m/s² (Finite Spatial Influence)",
-                                   "Damp · 1/s (Finite Spatial Influence)" };
-    for (int Group = 0; Group < 3; ++Group)
+    // 📝 The 17-card library moved out to the shared Asset Browser; the sheet keeps its chrome and hands off.
     {
-        const ImVec2 Sub = Content.Space(16.0f, Group == 0 ? 0.0f : 12.0f, 6.0f);
-        Content.Text(Faces.SemiBold, 10.0f, Sub.x, Sub.y, 1.4f, ResolveCssColour(0x707070FF), GroupTitles[Group], 0.9f);
-        int InGroup = 0;
-        for (int Type = 0; Type < QueryForceFieldTypeCount(); ++Type)
+        const ImVec2 Browse = Content.Space(64.0f, 8.0f, 0.0f);
+        const ImVec2 BrowseMin(Browse.x, Browse.y);
+        const ImVec2 BrowseMax(Browse.x + Content.Width, Browse.y + 64.0f);
+        InnerList->AddRectFilled(BrowseMin, BrowseMax, ResolveCssColour(0x1A1A1AFF), 16.0f);
+        InnerList->AddRect(BrowseMin, BrowseMax, ResolveCssColour(0xE8C27A66), 16.0f, ImDrawFlags_None, 1.0f);
+        Content.Text(Faces.Medium, 13.0f, BrowseMin.x + 16.0f, BrowseMin.y + 10.0f, 1.3f,
+                     ResolveCssColour(0xE8C27AFF), "Browse forcefield types\u2026");
+        Content.Text(Faces.Regular, 10.5f, BrowseMin.x + 16.0f, BrowseMin.y + 34.0f, 1.4f,
+                     ResolveCssColour(0x848484FF), "17 types \u00B7 opens the shared Asset Browser");
+        Content.Text(Faces.Medium, 14.0f, BrowseMax.x - 34.0f, BrowseMin.y + 20.0f, 1.3f,
+                     ResolveCssColour(0xE8C27AFF), "\u2197");
+        RecordRect(State, "Library/Browse", BrowseMin, BrowseMax);
+        if (InvisibleRect("##LibraryBrowse", BrowseMin, BrowseMax))
         {
-            if (QueryForceFieldType(Type).Contribution != Group) continue;
-            ++InGroup;
-        }
-        const int Rows = (InGroup + Columns - 1) / Columns;
-        const ImVec2 Grid = Content.Space(Rows * CardTall + (Rows - 1) * 9.0f, 0.0f, 0.0f);
-        int Placed = 0;
-        for (int Type = 0; Type < QueryForceFieldTypeCount(); ++Type)
-        {
-            const ForceFieldWorkspaceType& Info = QueryForceFieldType(Type);
-            if (Info.Contribution != Group) continue;
-            const int CellX = Placed % Columns;
-            const int CellY = Placed / Columns;
-            const ImVec2 CardMin(Grid.x + CellX * (CardWide + 9.0f), Grid.y + CellY * (CardTall + 9.0f));
-            const ImVec2 CardMax(CardMin.x + CardWide, CardMin.y + CardTall);
-            const int CardVerts = InnerList->VtxBuffer.Size;
-            InnerList->AddRectFilled(CardMin, CardMax, ResolveCssColour(0x212121FF), 16.0f);
-            ImGui::ShadeVertsLinearColorGradientKeepAlpha(InnerList, CardVerts, InnerList->VtxBuffer.Size, CardMin, CardMax,
-                                                          ResolveCssColour(0x212121FF), ResolveCssColour(0x191919FF));
-            InnerList->AddRect(CardMin, CardMax, ResolveCssColour(0xFFFFFF11), 16.0f, ImDrawFlags_None, 1.0f);
-            const ImVec2 SwatchMin(CardMin.x + 12.0f, CardMin.y + 12.0f);
-            InnerList->AddRectFilled(SwatchMin, ImVec2(SwatchMin.x + 24.0f, SwatchMin.y + 24.0f),
-                                     ResolveCssColour((Info.Colour & 0xFFFFFF00) | 0x20), 8.0f);
-            (void)GlyphSymbol::Construct(InnerList, Info.Glyph, ImVec2(SwatchMin.x + 6.0f, SwatchMin.y + 6.0f), 12.0f, 1.8f,
-                                         ResolveCssColour(Info.Colour));
-            Content.Text(Faces.Medium, 12.5f, SwatchMin.x + 32.0f, CardMin.y + 13.0f, 1.3f, ResolveCssColour(0xEFEFEFFF), Info.Name);
-            char MetaLine[64]{};
-            const char* MetaUnit = "m";
-            char MetaDist[32]{};
-            FormatForceFieldDistance(Info.DefaultRadius, MetaDist, sizeof(MetaDist), MetaUnit);
-            std::snprintf(MetaLine, sizeof(MetaLine), "%s · %s %s", QueryForceFieldReachName(Info.Reach), MetaDist, MetaUnit);
-            const float MetaWide = Content.Measure(Faces.Regular, 9.5f, MetaLine);
-            Content.Text(Faces.Regular, 9.5f, CardMax.x - 12.0f - MetaWide, CardMin.y + 16.0f, 1.4f, ResolveCssColour(0x848484FF),
-                         MetaLine);
-            InnerList->PushClipRect(ImVec2(CardMin.x + 12.0f, CardMin.y + 44.0f), ImVec2(CardMax.x - 12.0f, CardMax.y - 10.0f), true);
-            float BlurbY = CardMin.y + 44.0f;
-            const char* Blurb = Info.Blurb;
-            int BlurbLines = 0;
-            while (Blurb != nullptr && Blurb[0] != '\0' && BlurbLines < 3)
+            if (Link != nullptr)
             {
-                size_t Take = std::strlen(Blurb);
-                char Line[128]{};
-                for (size_t Cut = Take; Cut > 0; --Cut)
-                {
-                    std::snprintf(Line, sizeof(Line), "%.*s", static_cast<int>(Cut), Blurb);
-                    if (Content.Measure(Faces.Regular, 10.5f, Line) <= CardWide - 24.0f || Cut <= 24)
-                    {
-                        Take = Cut;
-                        break;
-                    }
-                }
-                std::snprintf(Line, sizeof(Line), "%.*s", static_cast<int>(Take), Blurb);
-                Content.Text(Faces.Regular, 10.5f, CardMin.x + 12.0f, BlurbY, 1.4f, ResolveCssColour(0x7C7C7CFF), Line);
-                Blurb += Take;
-                while (Blurb[0] == ' ') ++Blurb;
-                BlurbY += 10.5f * 1.4f;
-                ++BlurbLines;
+                Link->OpenRequested = true;
+                Link->OpenWorkspace = AssetBrowserWorkspaceForceField;
             }
-            InnerList->PopClipRect();
-            ImGui::PushID(CardOrdinal);
-            char RectName[48]{};
-            std::snprintf(RectName, sizeof(RectName), "Library/Card%d", Type);
-            RecordRect(State, RectName, CardMin, CardMax);
-            if (InvisibleRect("##LibraryCard", CardMin, CardMax))
-            {
-                char ArmedMessage[128]{};
-                std::snprintf(ArmedMessage, sizeof(ArmedMessage), "Placement armed: %s", Info.Name);
-                State.PlacementType = Type;
-                State.LibraryOpen   = false;
-                AppendForceFieldWorkspaceLog(State, "PLACE", ArmedMessage, "click viewport to drop", "Place");
-            }
-            ImGui::PopID();
-            ++Placed;
-            ++CardOrdinal;
+            else Toast::Show("The Asset Browser is not attached in this shell.");
+            State.LibraryOpen = false;
         }
     }
 
@@ -1433,8 +1371,35 @@ void ConstructLibrarySheet(ForceFieldWorkspaceState& State, const EditorTypeface
 //                                                    ROOT
 //------------------------------------------------------------------------------------------------------------------------
 
-void ConstructForceFieldWorkspace(ForceFieldWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Size)
+void ApplyForceFieldWorkspaceLink(ForceFieldWorkspaceState& State, AssetBrowserLink* Link)
 {
+    if (Link == nullptr || !Link->HasHandoff() || Link->OpenRecordWorkspace != AssetBrowserWorkspaceForceField) return;
+    static constexpr const char* Prefix = "forcefield/";
+    const char*                  Raw    = Link->OpenRecordId;
+    int                          Type   = -1;
+    if (std::strncmp(Raw, Prefix, std::strlen(Prefix)) == 0)
+        Type = QueryForceFieldTypeById(Raw + std::strlen(Prefix));
+    if (Type < 0)
+    {
+        char Message[192]{};
+        std::snprintf(Message, sizeof(Message), "Asset \u201C%s\u201D is not a forcefield type", Raw);
+        AppendForceFieldWorkspaceLog(State, "PLACE", Message);
+        Link->ClearHandoff();
+        return;
+    }
+    // 📝 The handoff arms placement exactly like the old library card did.
+    char ArmedMessage[128]{};
+    std::snprintf(ArmedMessage, sizeof(ArmedMessage), "Placement armed: %s", QueryForceFieldType(Type).Name);
+    State.PlacementType = Type;
+    State.LibraryOpen   = false;
+    AppendForceFieldWorkspaceLog(State, "PLACE", ArmedMessage, "click viewport to drop", "Place");
+    Link->ClearHandoff();
+}
+
+void ConstructForceFieldWorkspace(ForceFieldWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Size,
+                                  AssetBrowserLink* Link)
+{
+    ApplyForceFieldWorkspaceLink(State, Link);
     State.Rects.clear();
     if (State.ClockPlaying)
     {
@@ -1548,7 +1513,7 @@ void ConstructForceFieldWorkspace(ForceFieldWorkspaceState& State, const EditorT
     ImGui::EndChild();
     ImGui::PopStyleColor();
 
-    ConstructLibrarySheet(State, Faces, ImVec2(0.0f, 0.0f), Size);
+    ConstructLibrarySheet(State, Faces, ImVec2(0.0f, 0.0f), Size, Link);
     Toast::Construct();
     ImGui::End();
 }

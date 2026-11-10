@@ -50,11 +50,12 @@ int main(int ArgumentCount, char** Arguments)
         const EditorTypefaces Faces = EditorTypefaces::Resolve();
         ForceFieldWorkspaceState State{};
         ConstructForceFieldWorkspaceState(State);
+        AssetBrowserLink Link{};
 
         const auto Frame = [&]()
         {
             ImGui::NewFrame();
-            ConstructForceFieldWorkspace(State, Faces, IO.DisplaySize);
+            ConstructForceFieldWorkspace(State, Faces, IO.DisplaySize, &Link);
             ImGui::Render();
         };
         const auto RectCentre = [&](const char* Name)
@@ -169,14 +170,23 @@ int main(int ArgumentCount, char** Arguments)
         State.Sources[5].Activation = ForceFieldActivationWindow;
         Frame();
 
-        // 7d. The library opens, its cards arm placement, and the banner cancel disarms.
+        // 7d. The library delegates to the shared Asset Browser; the handoff arms placement, the banner cancel disarms.
         Click("Toolbar/All17");
         Confirm(State.LibraryOpen, "The All 17 pill did not open the library");
-        RectCentre("Library/Card0");
+        RectCentre("Library/Browse");
         RectCentre("Library/Close");
-        Click("Library/Card0");
-        Confirm(!State.LibraryOpen, "Picking a library card did not close the library");
-        Confirm(State.PlacementType == 0, "Picking a library card did not arm placement");
+        Click("Library/Browse");
+        Confirm(!State.LibraryOpen, "The browse row did not close the library");
+        Confirm(Link.OpenRequested, "The browse row did not request the browser");
+        Confirm(Link.OpenWorkspace == AssetBrowserWorkspaceForceField, "The browse row requested the wrong workspace");
+        Link.OpenRequested = false;
+        Link.OpenWorkspace = -1;
+        std::snprintf(Link.OpenRecordId, sizeof(Link.OpenRecordId), "forcefield/Attractor");
+        Link.OpenRecordWorkspace = AssetBrowserWorkspaceForceField;
+        Frame();
+        Frame();
+        Confirm(!Link.HasHandoff(), "The shell did not consume the handoff");
+        Confirm(State.PlacementType == QueryForceFieldTypeById("Attractor"), "The handoff did not arm placement");
         RectCentre("Banner/Cancel");
         Click("Banner/Cancel");
         Confirm(State.PlacementType == -1, "The banner cancel did not disarm placement");

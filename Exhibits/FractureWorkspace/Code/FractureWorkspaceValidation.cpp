@@ -53,11 +53,12 @@ int main(int ArgumentCount, char** Arguments)
         const EditorTypefaces Faces = EditorTypefaces::Resolve();
         FractureWorkspaceState State{};
         ConstructFractureWorkspaceState(State);
+        AssetBrowserLink Link{};
 
         const auto Frame = [&]()
         {
             ImGui::NewFrame();
-            ConstructFractureWorkspace(State, Faces, IO.DisplaySize);
+            ConstructFractureWorkspace(State, Faces, IO.DisplaySize, &Link);
             ImGui::Render();
         };
         const auto RectCentre = [&](const char* Name)
@@ -232,14 +233,36 @@ int main(int ArgumentCount, char** Arguments)
             Confirm(State.ExplodeAmount == 0.0, "Reassemble did not restage explode = 0");
         }
 
-        // 9. Library: preset cards refuse to spawn; the census still counts.
-        Click("Library/PresetFilter2");
-        Confirm(State.PresetGroup == 2, "The Brittle filter did not engage");
-        Click("Library/Card1");
-        Confirm(Toast::QueryVisible(), "The spawn card raised no toast");
-        Confirm(!State.Log.empty() && State.Log.front().Channel == "SPAWN", "The spawn card logged no SPAWN line");
-        Click("Library/PresetFilter0");
-        Confirm(State.PresetGroup == 0, "The All filter did not restore");
+        // 9. Library: browsing delegates to the shared Asset Browser; handoffs spawn-refuse/select/apply.
+        Click("Library/Browse");
+        Confirm(Link.OpenRequested, "The browse row did not request the browser");
+        Confirm(Link.OpenWorkspace == AssetBrowserWorkspaceFracture, "The browse row requested the wrong workspace");
+        Link.OpenRequested = false;
+        Link.OpenWorkspace = -1;
+        const auto HandOff = [&](const char* Id)
+        {
+            std::snprintf(Link.OpenRecordId, sizeof(Link.OpenRecordId), "%s", Id);
+            Link.OpenRecordWorkspace = AssetBrowserWorkspaceFracture;
+            Frame();
+            Frame();
+            Confirm(!Link.HasHandoff(), "The shell did not consume the handoff");
+        };
+        HandOff("fracture/monolith-concrete");
+        Confirm(Toast::QueryVisible(), "The spawn handoff raised no toast");
+        Confirm(!State.Log.empty() && State.Log.front().Channel == "SPAWN", "The spawn handoff logged no SPAWN line");
+        HandOff("fracture-solver/griffith");
+        Confirm(State.Constructs[State.ActiveConstruct].Spec.Solver == QueryFractureSolverById("griffith"),
+                "The solver handoff did not apply");
+        Confirm(State.Log.front().Channel == "PARAM", "The solver handoff logged no PARAM line");
+        HandOff("fracture-mat/granite");
+        Confirm(State.Constructs[State.ActiveConstruct].Spec.Material == QueryFractureMaterialById("granite"),
+                "The material handoff did not apply");
+        Confirm(State.Log.front().Channel == "FRACTURE", "The material handoff logged no FRACTURE line");
+        HandOff("fracture/construct-polymer");
+        Confirm(State.Selected == 6 && State.ActiveConstruct == 6, "The construct handoff did not open");
+        Confirm(State.Log.front().Channel == "FRACTURE", "The construct handoff logged no FRACTURE line");
+        HandOff("fracture/construct-monolith");
+        Confirm(State.Selected == 0 && State.ActiveConstruct == 0, "The monolith handoff did not restore");
 
         // 10. Top bar: tabs select silently; add/export/help refuse.
         Click("TopBar/Tab3");
