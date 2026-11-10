@@ -20,6 +20,8 @@ struct ImVec2;
 #include "Engine/Interface/SceneDirectoryPanel.h"
 #include "Engine/Interface/SceneInspectorPanel.h"
 #include "Engine/Interface/ParticleEditor/ParticleViewportPresentation.h"
+#include "Frontier/Engine/Interface/Workspaces/FractureWorkspace.h"
+#include "Frontier/Extensions/Physics/FractureStudioRuntime.h"
 #include "UI/Editor/ControlCentrePanel.h"
 namespace Frontier
 {
@@ -290,6 +292,9 @@ class EverestWorkspace
     bool                                           SceneParticleLoaded = false;
     bool                                           SceneParticleFilePresent = false;
     std::unique_ptr<Frontier::PhysicsExtension>    Physics;
+    Frontier::FractureWorkspaceState               FractureStudioState;
+    std::unique_ptr<Frontier::FractureStudioRuntime> FractureStudioRuntime;
+    bool                                            FractureStudioOpen = false;
 #endif
 
     std::filesystem::path ProjectRoot;

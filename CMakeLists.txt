@@ -130,6 +130,7 @@ add_library(FrontierSceneEditorUI STATIC
     Frontier/Engine/Scene/DynamicsSpaceCodecs.cpp
     Frontier/Engine/Scene/WorldSpace.cpp
     Frontier/Engine/Scene/GeometryLayout.cpp
+    Frontier/Engine/Fracture/FracturePartition.cpp
     Frontier/Engine/Diagnostics/LogCategories.cpp
     Frontier/Engine/Diagnostics/LogRingStore.cpp
     Frontier/Engine/Diagnostics/LogStream.cpp
@@ -326,7 +327,8 @@ add_library(FrontierPhysicsExtension STATIC
     Frontier/Extensions/Physics/JoltExtension.cpp
     Frontier/Extensions/Physics/JoltSubstrate.cpp
     Frontier/Extensions/Physics/PhysicsSpace.cpp
-    Frontier/Extensions/Physics/PhysicsExtension.cpp)
+    Frontier/Extensions/Physics/PhysicsExtension.cpp
+    Frontier/Extensions/Physics/FractureStudioRuntime.cpp)
 target_link_libraries(FrontierPhysicsExtension PUBLIC FrontierSceneEditorUI PRIVATE Jolt)
 
 add_library(EverestProjectEditor STATIC
