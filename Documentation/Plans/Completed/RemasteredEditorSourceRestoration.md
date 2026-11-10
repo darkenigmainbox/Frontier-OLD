@@ -1,6 +1,6 @@
 # Remastered editor source restoration
 
-**Status:** source restoration and browser verification complete on 2026-11-09. Fluid C++/GPU integration remains separate.
+**Status:** source restoration and browser verification complete on 2026-11-09. A later change adds a separate native C++ Slang/Vulkan solver; it remains unconnected to this browser prototype.
 
 ## Scope
 
@@ -54,6 +54,6 @@ not native-GPU verification. Reproduction details and the tested local revision 
 
 ## Deferred
 
-- Connect the restored browser authoring UI to the checkout's C++ `FluidSpace` or provide a native production editor.
-- Validate native WebGPU/hardware execution. The browser's software-rendered evidence does not establish it.
+- Connect the restored browser authoring UI to the native C++ `FluidSimulationSequence`, or wire the native GPU sequence into a production Fluid workspace. The existing native Fluid shell remains unwired.
+- The native C++ Slang/Vulkan compute path has since passed on software SwiftShader; physical hardware GPU and Windows/MSVC execution remain untested. Browser WebGPU selection in the earlier browser checks still fell back to WebGL2.
 - Continue the separate non-asset-editor workspace parity effort under its existing project scope.

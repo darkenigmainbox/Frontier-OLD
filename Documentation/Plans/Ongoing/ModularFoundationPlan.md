@@ -6,9 +6,10 @@ This plan defines the full modular rewrite and C++20 generic architecture for **
 from the `56279e1` baseline on branch `arena/bfba53e1-frontier`.
 
 **Execution update (2026-11-09):** The Fluid browser authoring UI is present at `Experimental/Fluid/`, restored from the
-latest inspected Frontier- source and browser-verified. It is a standalone JavaScript prototype; it is not connected to the
-C++ `FluidSpace`. Do not write a replacement editor or infer that the native solver has UI integration. The current C++ CPU
-solver is a partial engine foundation, not a reason to defer the separately available authoring UI.
+latest inspected Frontier- source and browser-verified. Separately, the native C++ `FluidSimulationSequence` now executes its
+Eulerian solver with Vulkan compute and `.slang` shaders; pinned SwiftShader GPU validation passes. `FluidSpace` is the host-side
+input/readback snapshot, not a CPU solver. The browser prototype and native sequence are not connected, and the current C++
+Fluid UI shell does not launch the GPU sequence. Preserve the existing browser UI; do not claim live native UI integration.
 
 - **No Editor or UI work in this phase:** Do not modify `UI/`, ImGui panels, inspectors, docking chrome, or modal
   windows until the engine, simulation spaces, codecs, and extensions rest on a verified C++20 foundation.
@@ -205,18 +206,21 @@ Rewrite and harden each foundational space and extension over Phases 1–2 (and 
        -> `[[rule]]` tables) and dispatches `PhysicsImpactEvent` / `PhysicsImpactRing` telemetry and
        `FluidBurstTriggerEvent` (thermal / vapor / smoke channels) into preset-scaled bursts — zero bespoke
        `ImpactSpark.slang` shader needed!
-5. **Fluid Foundation (`Frontier/Engine/PhysicalDynamics/FluidDynamics/` + `Extensions/Fluid/` + `.fluidspace`):**
-   - **Current partial C++ baseline (2026-11-09):** `FluidSpace` + `FluidSimulationSequence` provide a validated CPU Eulerian
-     grid, `.fluidspace` schema, source projection, advection/diffusion/buoyancy/pressure projection, wind sampling, and burst
-     trigger extraction. This is not a GPU solver or a completed fluid extension.
+5. **Fluid Foundation (`Frontier/Engine/PhysicalDynamics/FluidDynamics/` + `.fluidspace`):**
+   - **Native GPU baseline (2026-11-09):** `FluidSpace` owns a validated lattice descriptor, host-authored radial-source
+     queue, and initial/latest-readback snapshot. `FluidSimulationSequence` dispatches Slang compute for field/source input,
+     semi-Lagrangian advection, stable smoke/vapor diffusion, buoyancy, Jacobi pressure projection, and a 3D volume preview.
+     No CPU state-evolution fallback is used. The native `IFieldSampler` is sampled into a GPU-readable input texture, and
+     the explicit readback feeds `FluidBurstTriggerEvent` extraction. `FluidSimulationGpuValidation` passed on pinned
+     SwiftShader Vulkan; this is software Vulkan validation, not physical-hardware testing.
    - **Existing authoring UI:** the full gas/smoke browser editor and its WebGL2/experimental WebGPU engines are in
      `Experimental/Fluid/`. Preserve that UI and its effect authoring model; it is a separate prototype, not a node editor,
-     and currently does not call into the C++ solver. Its source and verification are documented in
-     `Documentation/Plans/Completed/RemasteredEditorSourceRestoration.md`.
-   - **Remaining engine work:** define a deliberate browser/native interchange or native editor bridge; add an actual GPU
-     execution path only after the engine/UI boundary is specified; complete boundary profiles, thermal transport,
-     replication of authored/release state and simulation clock, and `ParticleTriggerRouter` coupling for fluid bursts.
-     Do not replace the existing browser UI with another editor.
+     and does not call into the C++ solver. The C++ native Fluid UI shell likewise does not launch the GPU sequence. Its
+     source and browser verification are documented in `Documentation/Plans/Completed/RemasteredEditorSourceRestoration.md`.
+   - **Remaining engine/UI work:** define a deliberate browser/native interchange or native editor bridge; complete boundary
+     profiles, richer thermal transport, replication of authored/release state and simulation clock, and wire the native
+     sequence into a future Fluid workspace. Fluid bursts continue through `ParticleTriggerRouter`; do not replace the
+     existing browser UI with another editor.
 6. **Rendering & Unified `GizmoSpace` Cleanup (Purging Banned Vocabulary):**
    - **Checkpoint (2026-11-09):** renamed `SceneGeometryOccupancy.{h,cpp}` to `SceneSubjectPlacement.{h,cpp}`;
      renamed the distance-space and relocation source/classes to `SubjectDistanceSpace` / `SubjectRelocation`, plus the

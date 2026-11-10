@@ -2,6 +2,21 @@
 
 Single progress and violation tracker. Detailed evidence belongs in Exhibits, not competing progress reports.
 
+## Native Fluid GPU sequence (2026-11-09)
+
+- Replaced the C++ CPU `FluidSimulationSequence` with a Vulkan/Slang GPU solver. `FluidSpace` now holds initial/readback
+  snapshots and a bounded radial-source queue; force/source application, advection, scalar diffusion, divergence, Jacobi
+  pressure solve, velocity projection, and volume preview execute through `.slang` compute pipelines.
+- The native level `IFieldSampler` is sampled at Fluid cell centres into a GPU-readable 3D field input. Fluid bursts are still
+  extracted from explicit readback and routed by `ParticleTriggerRouter::DispatchFluidBurst` into `ParticleSpace`.
+- Added compiled Fluid shader archives, `FluidSimulationGpuValidation`, and CTest SwiftShader runtime configuration. On
+  SwiftShader Device (Subzero), the GPU test passed source transport, field coupling, pressure projection, explicit readback,
+  preview, disabled-sampler fallback and burst routing; divergence RMS was `0.424441 -> 0.357503`.
+- `FluidSpaceValidation` covers schema, queued inputs, a direct world-space ForceField sample used by Particle coupling, and burst routing; the GPU validation checks the Fluid field-texture upload. The browser prototype and native C++ solver
+  remain separate; the Fluid editor shell is not wired to live simulation. Hardware GPU, Windows/MSVC, replication/boundary
+  profiles, richer thermal transport and editor/browser bridging remain open.
+- Evidence and reproduction: `Exhibits/FluidEditor/README.md`.
+
 ## Remastered UI conversion — U0 shared Studio kit (2026-11-09)
 
 - **Plan:** `Documentation/Plans/Ongoing/RemasteredUiConversionPlan.md` (Phase U, UI shells first, explicit NOOPs).
@@ -24,36 +39,30 @@ Single progress and violation tracker. Detailed evidence belongs in Exhibits, no
 - **Validation:** Vite 7.3.6 build passed; Node scene/codec tests 22/22; Chromium/SwiftShader browser checks 18/18 and interaction
   checks 9/9; static app routes 7/7 returned HTTP 200. Evidence: `Exhibits/FluidEditor/README.md` and
   `Exhibits/FluidEditor/Images/Verification-2026-11-09/VerifiedWorkspace.png`.
-- **Limits and remaining scope:** headless browser used software WebGL; optional WebGPU fell back to WebGL2. No C++ `FluidSpace`
-  integration or native-GPU validation is claimed. Replication/release-state transport, boundary profiles, richer thermal
-  transport, extension/editor integration, broader numerical validation, and Phase 3 Rendering/Gizmo cleanup remain open.
-  Shared UI foundation/parity work also remains ongoing; Vehicle Lab and AssetInspector stay out of scope. See the completed
-  source-restoration plan and ongoing workspace-parity plan for details.
+- **Limits at source-restoration checkpoint:** headless browser used software WebGL; optional WebGPU fell back to WebGL2. That
+  restoration step did not itself add C++ Fluid integration. The later native Slang/Vulkan GPU sequence and its limits are
+  recorded in the current Fluid status above. Replication/release-state transport, boundary profiles, richer thermal transport,
+  editor/browser integration, and Phase 3 Rendering/Gizmo cleanup remain open. Shared UI foundation/parity work also remains
+  ongoing; Vehicle Lab and AssetInspector stay out of scope.
 
 ## Modular foundation — Phase 3 checkpoint (2026-11-09)
 
-- **Fluid clarification:** the C++ `FluidSpace` is a partial CPU Eulerian engine foundation, not a replacement for the editor.
-  The existing non-node gas/smoke authoring UI is restored in `Experimental/Fluid/` and browser-verified; it is still standalone
-  and not connected to the C++ solver. Preserve both facts: no new editor is needed, while a native/browser engine bridge and
-  GPU execution remain unfinished. See `Documentation/Plans/Ongoing/ModularFoundationPlan.md`.
-- Added a first headless CPU Eulerian fluid foundation in `Frontier/Engine/PhysicalDynamics/FluidDynamics/`:
-  `.fluidspace` profile/configuration schema, bounded grid allocation, rotated/scaled cell coordinates, radial source projection,
-  semi-Lagrangian velocity/density advection, configurable implicit smoke/vapor diffusion, buoyancy, `IFieldSampler` wind
-  coupling, Jacobi pressure projection, and ranked `FluidBurstTriggerEvent` extraction for the particle router.
-- Added `FluidSpaceValidation` for `.fluidspace` file/text round trips, `.toml` rejection, source injection, diffusion-enabled
-  stepping, wind coupling, pressure-field finiteness, and burst events.
-- Verification: GCC 12.2 Debug target build succeeded; `FluidSpaceValidation` and the adjacent
-  `ParticleSpaceValidation` CTests passed (2/2) on Linux. Build tooling and prerequisite details are in the session report.
-- Partial foundation only: fluid replication/release-state transport, fluid extension/editor integration, boundary profiles,
-  richer thermal transport, GPU execution, and broader numerical convergence analysis remain open. Phase 3 Rendering/Gizmo
-  cleanup is also outstanding.
+- **Fluid checkpoint note:** these bullets record the initial CPU-only baseline and have been superseded by the native GPU
+  sequence at the top of this tracker. The C++ grid was never the browser editor; the restored browser UI remains separate.
+- Added the initial `.fluidspace` profile/configuration schema, bounded grid allocation, rotated/scaled cell coordinates, radial
+  source projection, CPU transport/projection and burst extraction. This was subsequently replaced as the simulation execution
+  path by the Slang/Vulkan compute sequence; host `FluidSpace` cells are now initial/readback snapshots only.
+- The earlier `FluidSpaceValidation` covered schema and CPU stepping; the current target instead validates queued GPU inputs and
+  routing, while `FluidSimulationGpuValidation` exercises the compute path. Latest results are recorded above.
+- Fluid replication/release-state transport, extension/editor integration, boundary profiles, richer thermal transport and
+  broader convergence analysis remain open. Phase 3 Rendering/Gizmo cleanup is also outstanding.
 
 ## Modular foundation — Phase 3.6 / Phase 4 kickoff (2026-11-09)
 
-- **Fluid status corrected:** the C++ CPU grid was a partial engine foundation, not the authoring UI. The existing non-node browser
-  editor is restored at `Experimental/Fluid/`, browser-verified, and still separate from the C++ `FluidSpace`; no replacement UI
-  is needed. The next Fluid work is the native/browser boundary plus the remaining GPU, boundary, thermal, replication, and
-  particle-trigger integration—not another editor. Details are in `Documentation/Plans/Ongoing/ModularFoundationPlan.md`.
+- **Fluid status:** the restored non-node browser editor at `Experimental/Fluid/` remains a separate prototype, not the native
+  C++ UI. The native compute backend is now implemented in `.slang` and passed pinned SwiftShader Vulkan validation; it also
+  preserves Fluid-to-Particle burst routing. Remaining work is the native/browser boundary, boundary/thermal/replication depth,
+  and future workspace wiring—not another editor. Details are in `Documentation/Plans/Ongoing/ModularFoundationPlan.md`.
 - Renamed `SceneGeometryOccupancy.{h,cpp}` to `SceneSubjectPlacement.{h,cpp}`; renamed distance-space/relocation files and
   classes to `SubjectDistanceSpace` / `SubjectRelocation`, result types to `SubjectPlacement` / `SubjectPick`, and viewport
   picking to `PickSubjects`. Added the `SpatialEditable` concept and `PlacementGizmo` adapters with compile-time API checks.

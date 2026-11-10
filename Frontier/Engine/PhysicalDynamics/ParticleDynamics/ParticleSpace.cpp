@@ -112,10 +112,23 @@ void ParticleSpace::ApplyWindLink(const ParticlePreset& Preset)
 
 void ParticleSpace::SampleLevelForceField(const IFieldSampler& Field)
 {
+    if (!Field.QueryFieldEnabled())
+    {
+        if (LevelWind.FlowMps)
+        {
+            LevelWind.FlowMps.reset();
+            AdvanceRevision();
+        }
+        return;
+    }
     const Vec3d Anchor{ LevelWind.AnchorMetres[0], LevelWind.AnchorMetres[1], LevelWind.AnchorMetres[2] };
-    const Vec3d Flow = Field.SampleFieldFlow(WorldToFieldAxes(Anchor));
-    LevelWind.FlowMps = { Flow.X, Flow.Y, Flow.Z };
-    AdvanceRevision();
+    const Vec3d Flow = Field.SampleFieldFlow(WorldToFieldAxes(Anchor), 0.0, true);
+    const std::array<double, 3> Reading{ Flow.X, Flow.Y, Flow.Z };
+    if (!LevelWind.FlowMps || *LevelWind.FlowMps != Reading)
+    {
+        LevelWind.FlowMps = Reading;
+        AdvanceRevision();
+    }
 }
 
 void ParticleSpace::SerializeDomainState(toml::table& Out) const
@@ -319,7 +332,8 @@ std::array<uint32_t, 3> ParticleSpace::ResolveProbeCell() const noexcept
 //------------------------------------------------------------------------------------------------------------------------
 
 ParticleRefreshPlan ParticleSpace::Advance(double RealDeltaSeconds, uint32_t ViewWidth, uint32_t ViewHeight,
-                                           const ParticleCameraPose* CameraOverride)
+                                           const ParticleCameraPose* CameraOverride,
+                                           const IFieldSampler* SharedFieldSampler)
 {
     ParticleRefreshPlan Plan;
     Plan.ViewWidth  = std::max(1u, ViewWidth);
@@ -357,8 +371,19 @@ ParticleRefreshPlan ParticleSpace::Advance(double RealDeltaSeconds, uint32_t Vie
     const double Aspect = static_cast<double>(Plan.ViewWidth) / static_cast<double>(std::max(1u, Plan.ViewHeight));
     const double VerticalFieldOfView = CameraOverride != nullptr ? CameraOverride->VerticalFieldOfView : std::numbers::pi / 4.0;
     Plan.Camera = CameraOverride != nullptr ? ResolveParticleCamera(*CameraOverride, Aspect) : ResolveParticleCamera(Camera, Aspect);
-    std::vector<ParticleField> Flowing(Fields.begin(), Fields.end());
-    if (LevelWind.Follow && LevelWind.FlowMps && CountFlowFields() < ParticleWindComponentLimit)
+    Plan.SharedFieldActive = LevelWind.Follow && SharedFieldSampler != nullptr && SharedFieldSampler->QueryFieldEnabled();
+    if (LevelWind.Follow && SharedFieldSampler != nullptr) SampleLevelForceField(*SharedFieldSampler);
+    if (Plan.SharedFieldActive)
+    {
+        const Vec3d Origin = WorldToFieldAxes({ LevelWind.AnchorMetres[0], LevelWind.AnchorMetres[1], LevelWind.AnchorMetres[2] });
+        Plan.SharedFieldOriginMetres = { Origin.X, Origin.Y, Origin.Z };
+    }
+
+    // 📝 A followed native ForceField already includes ambient wind and authored environmental flows. Do not also pack
+    //    Particle's legacy flow generators into the same lattice; its acceleration and damping fields below remain local.
+    std::vector<ParticleField> Flowing;
+    if (!Plan.SharedFieldActive) Flowing.assign(Fields.begin(), Fields.end());
+    if (!Plan.SharedFieldActive && LevelWind.Follow && LevelWind.FlowMps && CountFlowFields() < ParticleWindComponentLimit)
     {
         const double Speed = std::hypot((*LevelWind.FlowMps)[0], (*LevelWind.FlowMps)[2]);
         if (Speed > 1.0e-6)

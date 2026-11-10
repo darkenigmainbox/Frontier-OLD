@@ -1,9 +1,13 @@
 /*==========================================================================================================================================
                                                        FLUIDSPACEVALIDATION.CPP
 ==========================================================================================================================================*/
-// 🧪 Validates fluid .space schema, CPU transport/projection, radial source projection, force coupling, and particle events.
+// 🧪 Validates Fluid .space schema, queued GPU source inputs, native-field sharing, and Fluid-to-Particle burst routing.
 
+#include "Engine/PhysicalDynamics/AtmosphericFlow.h"
+#include "Engine/PhysicalDynamics/ForceField.h"
 #include "Engine/PhysicalDynamics/FluidDynamics/FluidSimulationSequence.h"
+#include "Engine/PhysicalDynamics/ParticleDynamics/ParticleSpace.h"
+#include "Engine/PhysicalDynamics/ParticleDynamics/ParticleTriggerRouter.h"
 
 #include <algorithm>
 #include <cmath>
@@ -20,56 +24,12 @@ bool Require(bool Condition, const char* Message)
     return Condition;
 }
 
-double ComputeDivergenceMagnitude(const Frontier::FluidSpace& Space)
-{
-    const uint32_t Width = Space.QueryCellCountX();
-    const uint32_t Height = Space.QueryCellCountY();
-    const uint32_t Depth = Space.QueryCellCountZ();
-    const double InverseCellSpan = 1.0 / Space.QueryDescriptor().Configuration.CellSpanMetres;
-    double SquaredDivergenceSum = 0.0;
-    for (uint32_t Z = 0; Z < Depth; ++Z)
-        for (uint32_t Y = 0; Y < Height; ++Y)
-            for (uint32_t X = 0; X < Width; ++X)
-            {
-                const Frontier::Vec3d Right = Space.QueryCell(std::min(X + 1, Width - 1), Y, Z).AirVelocityMetresPerSecond;
-                const Frontier::Vec3d Left = Space.QueryCell(X == 0 ? 0 : X - 1, Y, Z).AirVelocityMetresPerSecond;
-                const Frontier::Vec3d North = Space.QueryCell(X, std::min(Y + 1, Height - 1), Z).AirVelocityMetresPerSecond;
-                const Frontier::Vec3d South = Space.QueryCell(X, Y == 0 ? 0 : Y - 1, Z).AirVelocityMetresPerSecond;
-                const Frontier::Vec3d Above = Space.QueryCell(X, Y, std::min(Z + 1, Depth - 1)).AirVelocityMetresPerSecond;
-                const Frontier::Vec3d Below = Space.QueryCell(X, Y, Z == 0 ? 0 : Z - 1).AirVelocityMetresPerSecond;
-                const double Divergence = 0.5 * InverseCellSpan *
-                    ((Right.X - Left.X) + (North.Y - South.Y) + (Above.Z - Below.Z));
-                SquaredDivergenceSum += Divergence * Divergence;
-            }
-    return std::sqrt(SquaredDivergenceSum / static_cast<double>(Space.QueryCells().size()));
-}
-
-struct TestField final : Frontier::IFieldSampler
-{
-    [[nodiscard]] bool QueryFieldEnabled() const noexcept override { return true; }
-    [[nodiscard]] double QueryGroundPlaneYMeters() const noexcept override { return 0.0; }
-    [[nodiscard]] Frontier::Vec3d SampleFieldFlow(const Frontier::Vec3d&, double, bool) const noexcept override
-    {
-        return { 0.25, 0.0, 0.0 };
-    }
-    [[nodiscard]] Frontier::Vec3d SampleFieldContribution(Frontier::ForceContribution, const Frontier::Vec3d&,
-                                                          double, bool, int32_t) const noexcept override
-    {
-        return {};
-    }
-    [[nodiscard]] Frontier::FieldPointSample EvaluateFullField(const Frontier::Vec3d&, bool, double) const noexcept override
-    {
-        Frontier::FieldPointSample Result;
-        Result.AirVelocityMps = { 0.25, 0.0, 0.0 };
-        return Result;
-    }
-};
-
 } // namespace
 
-int main()
+int main(int ArgumentCount, char** Arguments)
 {
     using namespace Frontier;
+    const std::filesystem::path Repository = ArgumentCount > 1 ? std::filesystem::path(Arguments[1]) : std::filesystem::current_path();
     FluidSpaceDescriptor Descriptor;
     Descriptor.Spatial.PositionMetres = { 10.0, -2.0, 3.0 };
     Descriptor.Configuration.CellCountX = 8;
@@ -102,51 +62,69 @@ int main()
                  "descriptor round-trip lost fields")) return 1;
 
     FluidSpace Space;
-    if (!Require(Space.Construct(RoundTrip, &Diagnostic), "construct failed")) return 1;
+    if (!Require(Space.Construct(RoundTrip, &Diagnostic), "FluidSpace construction failed")) return 1;
+    const Vec3d CellOrigin = Space.CellWorldPosition(3, 3, 3);
     RadialFluidSource Source;
-    Source.Spatial.PositionMetres = Space.CellWorldPosition(3, 3, 3);
+    Source.Spatial.PositionMetres = CellOrigin;
     Source.RadiusMetres = 1.1;
     Source.AirVelocityMetresPerSecond = { 0.5, 0.0, 0.0 };
-    Source.SmokeDensityRateKilogramsPerCubicMetreSecond = 2.0;
-    Source.VaporDensityRateKilogramsPerCubicMetreSecond = 1.0;
-    Source.TemperatureRateKelvinPerSecond = 400.0;
-    if (!Require(FluidSourceProjector::ProjectSource(Space, Source, 0.05) > 0, "source did not affect cells")) return 1;
+    Source.SmokeDensityRateKilogramsPerCubicMetreSecond = 8.0;
+    Source.VaporDensityRateKilogramsPerCubicMetreSecond = 8.0;
+    Source.TemperatureRateKelvinPerSecond = 2400.0;
+    if (!Require(Space.EnqueueRadialSource(Source, 0.05), "valid radial source was rejected")) return 1;
+    if (!Require(Space.QueryPendingSources().size() == 1, "radial source was not queued for the GPU")) return 1;
+    if (!Require(Space.QueryCell(3, 3, 3).SmokeDensityKilogramsPerCubicMetre == 0.0 &&
+                 Space.QueryCell(3, 3, 3).AirVelocityMetresPerSecond == Vec3d{},
+                 "source queue changed host snapshot before GPU execution")) return 1;
+    if (!Require(!Space.EnqueueRadialSource(Source, 0.0), "invalid radial-source timestep was accepted")) return 1;
 
-    const uint64_t InitialRevision = Space.QueryRevision();
-    TestField Field;
+    // 📝 The level owns one native ForceField snapshot; Fluid samples it as a GPU input and Particle uses it over the wind lattice.
+    ForceFieldSpace SharedField;
+    PlanetaryWindProfile SharedWind;
+    SharedWind.BearingRadians = 0.0;
+    SharedWind.SpeedMetersPerSecond = 3.0;
+    SharedWind.GustAmplitude = 0.0;
+    SharedWind.ShearPerKilometer = 0.0;
+    SharedWind.VeerRadiansPerKilometer = 0.0;
+    SharedWind.SwirlStrength = 0.0;
+    SharedWind.MesoscaleStrength = 0.0;
+    SharedField.SetWindProfile(SharedWind);
+    SharedField.SetElapsedSeconds(0.0);
+    if (!Require(SharedField.QueryFieldEnabled() && Length(SharedField.SampleWorldFlow(CellOrigin)) > 0.1,
+                 "native ForceField did not produce a world-space flow sample")) return 1;
+
+    ParticleEffectLibrary Library;
+    if (!Require(Library.Decode(Repository / "EngineContent" / "ParticleArchives" / "ParticleLibrary.particlespace", Diagnostic),
+                 "Particle library could not be loaded for Fluid-to-Particle coupling")) return 1;
+    ParticleSpace NativeParticles;
+    NativeParticles.ConstructDefault(Library);
+    NativeParticles.LevelWind.Follow = true;
+    NativeParticles.LevelWind.AnchorMetres = { Descriptor.Spatial.PositionMetres.X, Descriptor.Spatial.PositionMetres.Y,
+                                                Descriptor.Spatial.PositionMetres.Z };
+    const ParticleRefreshPlan NativePlan = NativeParticles.Advance(0.05, 640, 360, nullptr, &SharedField);
+    const std::vector<float> NativeLattice = SampleParticleWindLattice(SharedField, NativePlan.SharedFieldOriginMetres, false);
+    if (!Require(NativePlan.SharedFieldActive &&
+                 std::any_of(NativeLattice.begin(), NativeLattice.end(), [](float Value) { return std::fabs(Value) > 0.01f; }),
+                 "native ForceField did not drive the Particle wind lattice")) return 1;
+
+    FluidBurstTriggerEvent Burst;
+    Burst.WorldPointMetres = CellOrigin;
+    Burst.ImpulseDirection = { 0.0, 0.0, 1.0 };
+    Burst.ThermalIntensity = 1.0;
+    Burst.VaporIntensity = 0.8;
+    Burst.SmokeIntensity = 0.7;
+    Burst.EnergyScale = 1.0;
+    Burst.TriggerSeed = 1234;
+    const ParticleTriggerRouter Router = ParticleTriggerRouter::ConstructDefaultRouter();
+    const std::vector<ParticleBurstReceipt> Receipts = Router.DispatchFluidBurst(Burst, NativeParticles, Library);
+    if (!Require(!Receipts.empty() && !NativeParticles.Effects.empty() &&
+                 std::any_of(NativeParticles.Effects.begin(), NativeParticles.Effects.end(), [](const ParticleEffectInstance& Effect) {
+                     return Effect.PendingBurst > 0;
+                 }), "Fluid burst did not route through ParticleTriggerRouter into ParticleSpace")) return 1;
+
     FluidSimulationSequence Sequence;
-    if (!Require(Sequence.Advance(Space, 0.05, &Field, &Diagnostic), "simulation step failed")) return 1;
-    if (!Require(Space.QueryRevision() == InitialRevision + 1, "simulation did not advance the revision")) return 1;
-
-    bool FoundSmoke = false;
-    bool FoundWind = false;
-    for (const FluidCell& Cell : Space.QueryCells())
-    {
-        if (Cell.SmokeDensityKilogramsPerCubicMetre > 0.0 && Cell.TemperatureKelvin > Descriptor.Configuration.AmbientTemperatureKelvin)
-            FoundSmoke = true;
-        if (Cell.AirVelocityMetresPerSecond.X > 0.0) FoundWind = true;
-        if (!Require(std::isfinite(Cell.PressurePotentialSquareMetresPerSecondSquared) && Cell.SmokeDensityKilogramsPerCubicMetre >= 0.0 &&
-                     Cell.VaporDensityKilogramsPerCubicMetre >= 0.0, "simulation produced invalid cell values")) return 1;
-    }
-    if (!Require(FoundSmoke && FoundWind, "source or field coupling was lost during stepping")) return 1;
-    const auto Events = Sequence.CollectBurstTriggers(Space, 0.05, 0.01, 0.01);
-    if (!Require(!Events.empty() && Events.front().EnergyScale > 0.0, "fluid did not produce particle trigger events")) return 1;
-
-    FluidSpace ProjectionSpace;
-    if (!Require(ProjectionSpace.Construct(RoundTrip, &Diagnostic), "projection validation construction failed")) return 1;
-    for (uint32_t Z = 0; Z < ProjectionSpace.QueryCellCountZ(); ++Z)
-        for (uint32_t Y = 0; Y < ProjectionSpace.QueryCellCountY(); ++Y)
-            for (uint32_t X = 0; X < ProjectionSpace.QueryCellCountX(); ++X)
-                ProjectionSpace.AccessCell(X, Y, Z).AirVelocityMetresPerSecond =
-                    { (static_cast<double>(X) - 3.5) * 0.1,
-                      (static_cast<double>(Y) - 3.5) * 0.1,
-                      (static_cast<double>(Z) - 3.5) * 0.1 };
-    const double InitialDivergence = ComputeDivergenceMagnitude(ProjectionSpace);
-    if (!Require(Sequence.Advance(ProjectionSpace, 0.01, nullptr, &Diagnostic), "pressure projection step failed")) return 1;
-    const double ProjectedDivergence = ComputeDivergenceMagnitude(ProjectionSpace);
-    if (!Require(ProjectedDivergence < InitialDivergence, "pressure projection did not reduce field divergence")) return 1;
-
-    if (!Require(!Sequence.Advance(Space, 0.0, nullptr, &Diagnostic) && !Diagnostic.empty(), "invalid delta time was accepted")) return 1;
-    std::cout << "FluidSpaceValidation: schema, radial source, wind coupling, pressure solve, and burst triggers passed\n";
+    if (!Require(!Sequence.Advance(Space, 0.05, &SharedField, &Diagnostic) && !Diagnostic.empty(),
+                 "GPU Fluid simulation advanced before a Vulkan sequence was constructed")) return 1;
+    std::cout << "FluidSpaceValidation: schema, queued GPU sources, shared native field input, burst routing, and construction guards passed\n";
     return 0;
 }

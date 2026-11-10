@@ -382,6 +382,7 @@ EverestWorkspace::EverestWorkspace(Frontier::ControlCentrePanel& ControlCentre,
 
     Frontier::InspectorRuntime::Instance().RegisterSolarPlacementSolver(&Frontier::SolveSolarPlacement);
     Frontier::InspectorRuntime::Instance().RegisterLevelFlowSampler([this](const std::array<double, 3>& LevelMetres) { return SampleLevelFlow(LevelMetres); });
+    Frontier::InspectorRuntime::Instance().RegisterLevelFieldSamplerProvider([this] { return BuildLevelFieldSampler(); });
 
     Dockspace.ConfigureDockspaceKey("EverestWorkspaceDockspace");
     // 📝 No top toolbar (owner's request): only the Control Centre notch remains, in a band as tall as its tab.
@@ -464,6 +465,7 @@ EverestWorkspace::~EverestWorkspace()
     if (Physics && Physics->QueryRunning()) Physics->End(QueryWorldSpace());
     Frontier::InspectorRuntime::Instance().ConfigureEnvironmentAccess({});
     Frontier::InspectorRuntime::Instance().RegisterLevelFlowSampler({});
+    Frontier::InspectorRuntime::Instance().RegisterLevelFieldSamplerProvider({});
     Frontier::InspectorRuntime::Instance().ConfigureLevelFile({});
 #endif
 }
@@ -1229,14 +1231,9 @@ void EverestWorkspace::PresentSceneParticles(const SceneViewportRequest& Request
     if (!SceneParticleSpace) return;
     if (!SceneParticleDiagnostic.empty()) Image.Status += "  |  " + SceneParticleDiagnostic;
 
-    SceneParticleSpace->LevelWind.FlowMps.reset();
-    if (SceneParticleSpace->LevelWind.Follow)
-    {
-        if (const auto Flow = SampleLevelFlow(SceneParticleSpace->LevelWind.AnchorMetres))
-        {
-            SceneParticleSpace->LevelWind.FlowMps = std::array<double, 3>{(*Flow)[0], (*Flow)[2], -(*Flow)[1]};
-        }
-    }
+    std::shared_ptr<const Frontier::IFieldSampler> FieldSampler;
+    if (SceneParticleSpace->LevelWind.Follow) FieldSampler = BuildLevelFieldSampler();
+    if (!FieldSampler) SceneParticleSpace->LevelWind.FlowMps.reset();
 
     std::array<uint32_t, 2> Extent = Image.Extent;
     if (Extent[0] == 0 || Extent[1] == 0)
@@ -1246,7 +1243,7 @@ void EverestWorkspace::PresentSceneParticles(const SceneViewportRequest& Request
     }
     const Frontier::ParticleCameraPose SceneCamera{Request.CameraPosition, Request.CameraTarget, Request.CameraUp, Request.VerticalFieldOfView};
     const Frontier::ParticleCameraPose ParticleCamera = Frontier::ConvertSceneCameraToParticleAxes(SceneCamera);
-    Frontier::ParticleRefreshPlan Plan = SceneParticleSpace->Advance(Request.DeltaSeconds, Extent[0], Extent[1], &ParticleCamera);
+    Frontier::ParticleRefreshPlan Plan = SceneParticleSpace->Advance(Request.DeltaSeconds, Extent[0], Extent[1], &ParticleCamera, FieldSampler.get());
     Plan.TransparentBackground = true;
     Plan.Lensing[31]            = 1.0f;   // 📝 LensingRasterization returns straight-alpha texels for the interface image path.
     Plan.Floor                  = false;
@@ -1254,8 +1251,9 @@ void EverestWorkspace::PresentSceneParticles(const SceneViewportRequest& Request
     Plan.Guides.clear();
 
     Frontier::ParticleViewportRequest ParticleRequest;
-    ParticleRequest.Plan    = &Plan;
-    ParticleRequest.Effects = &SceneParticleSpace->Effects;
+    ParticleRequest.Plan         = &Plan;
+    ParticleRequest.Effects      = &SceneParticleSpace->Effects;
+    ParticleRequest.FieldSampler = std::move(FieldSampler);
     try
     {
         const Frontier::ParticleViewportImage ParticleImage = PresentParticleViewport(ParticleRequest);

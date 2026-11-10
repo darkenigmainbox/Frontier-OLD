@@ -16,7 +16,7 @@ time_scale = 1.0
 
 [level_wind]
 anchor_metres = [ 0.0, 0.0, 2.0 ]
-follow = false
+follow = true
 
 [lightning]
 amplitude_metres = 2.0

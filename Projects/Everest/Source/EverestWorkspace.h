@@ -24,6 +24,7 @@ struct ImVec2;
 namespace Frontier
 {
 class ForceFieldVisualization;
+class IFieldSampler;
 class ParticleEffectLibrary;
 class ParticleSpace;
 class PhysicsExtension;
@@ -233,6 +234,8 @@ class EverestWorkspace
     //    the Field view with its timeline lanes, its bar, and the slice over the scene.
     void AdvanceFieldTimeline(double DeltaSeconds);
     bool ConfigureFieldSlice(Frontier::ForceFieldVisualization& Slice, bool Camera);
+    // 📝 Immutable native ForceFieldSpace snapshot configured from this level's Force Field, Wind and ForceSource records.
+    [[nodiscard]] std::shared_ptr<const Frontier::IFieldSampler> BuildLevelFieldSampler();
     // 📝 The level's Force Field (wind, gusts, authored sources) at a level point, as the renderer evaluates it; empty without a
     //    Force Field record.
     [[nodiscard]] std::optional<std::array<double, 3>> SampleLevelFlow(const std::array<double, 3>& LevelMetres);

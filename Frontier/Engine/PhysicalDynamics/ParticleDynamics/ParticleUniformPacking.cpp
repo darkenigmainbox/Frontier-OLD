@@ -513,4 +513,37 @@ ParticleLensingReading PackParticleLensing(ParticleLensingBlock& Out, std::span<
     return Reading;
 }
 
+std::vector<float> SampleParticleWindLattice(const IFieldSampler& Field, const std::array<double, 3>& FieldOriginMetres,
+                                             bool IncludeCurlSwirl)
+{
+    const size_t CellCount = static_cast<size_t>(ParticleDomainDimensions[0]) * ParticleDomainDimensions[1] * ParticleDomainDimensions[2];
+    std::vector<float> Samples(CellCount * 4u, 0.0f);
+    if (!Field.QueryFieldEnabled()) return Samples;
+
+    const double CellSpan = std::max({ ParticleDomainSize[0] / ParticleDomainDimensions[0],
+                                       ParticleDomainSize[1] / ParticleDomainDimensions[1],
+                                       ParticleDomainSize[2] / ParticleDomainDimensions[2] });
+    for (uint32_t Z = 0; Z < ParticleDomainDimensions[2]; ++Z)
+        for (uint32_t Y = 0; Y < ParticleDomainDimensions[1]; ++Y)
+            for (uint32_t X = 0; X < ParticleDomainDimensions[0]; ++X)
+            {
+                const Vec3d Position{
+                    FieldOriginMetres[0] + ParticleDomainMinimum[0] + (static_cast<double>(X) + 0.5) * ParticleDomainSize[0] / ParticleDomainDimensions[0],
+                    FieldOriginMetres[1] + ParticleDomainMinimum[1] + (static_cast<double>(Y) + 0.5) * ParticleDomainSize[1] / ParticleDomainDimensions[1],
+                    FieldOriginMetres[2] + ParticleDomainMinimum[2] + (static_cast<double>(Z) + 0.5) * ParticleDomainSize[2] / ParticleDomainDimensions[2] };
+                Vec3d Flow = Field.SampleFieldFlow(Position, CellSpan, IncludeCurlSwirl);
+                if (!std::isfinite(Flow.X)) Flow.X = 0.0;
+                if (!std::isfinite(Flow.Y)) Flow.Y = 0.0;
+                if (!std::isfinite(Flow.Z)) Flow.Z = 0.0;
+                const size_t Texel = X + static_cast<size_t>(ParticleDomainDimensions[0]) *
+                                           (Y + static_cast<size_t>(ParticleDomainDimensions[1]) * Z);
+                const size_t Offset = Texel * 4u;
+                Samples[Offset]     = static_cast<float>(Flow.X);
+                Samples[Offset + 1] = static_cast<float>(Flow.Y);
+                Samples[Offset + 2] = static_cast<float>(Flow.Z);
+                Samples[Offset + 3] = static_cast<float>(std::hypot(Flow.X, Flow.Y, Flow.Z));
+            }
+    return Samples;
+}
+
 } // namespace Frontier
