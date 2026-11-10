@@ -241,6 +241,12 @@ int main()
     std::filesystem::path TextureRequestedFolder;
     bool TextureRequestPending = false;
     bool TextureReturnRequested = false;
+    const auto PersistTextureLayout = [&]()
+    {
+        std::string TextureLayoutMessage;
+        if (!TextureHost.PersistLayout(TextureLayoutMessage))
+            Frontier::DiagnosticJournal::Append("TextureWorkspaceLayout", TextureLayoutMessage);
+    };
     std::filesystem::path LaunchProject = ResolveLaunchProject();
 #ifdef FRONTIER_SOLIDARC_ENABLED
     // 📝 Open by file type: a .solidarc given to Frontier.exe (a drop on its icon, or Frontier picked in "Open with") belongs to
@@ -635,6 +641,10 @@ int main()
                 {
                     return Appearance->QueryInput().QueryApplied().EvaluatePointerDelta(Displacement);
                 });
+                TextureHost.ConfigureControlCentre(Appearance);
+                std::string TextureLayoutDiagnostic;
+                if (!TextureHost.RestoreLayout(TextureLayoutDiagnostic))
+                    Frontier::DiagnosticJournal::Append("TextureWorkspaceLayout", TextureLayoutDiagnostic);
                 glfwSetWindowTitle(Window,
                     ("Frontier - Texture Studio - " + Frontier::DiagnosticJournal::EncodePath(Folder.filename())).c_str());
                 Frontier::DiagnosticJournal::Append("TextureWorkspace",
@@ -653,6 +663,7 @@ int main()
             TextureReturnRequested = false;
             if (TextureHost.IsOpen())
             {
+                PersistTextureLayout();
                 TextureHost.Close();
                 TextureBackend.reset();
                 Browser->ResetSelection();
@@ -707,7 +718,11 @@ int main()
         RetireSceneView();
         EverestSpace.reset();
         Workspace.reset();
-        if (TextureHost.IsOpen()) TextureHost.Close();
+        if (TextureHost.IsOpen())
+        {
+            PersistTextureLayout();
+            TextureHost.Close();
+        }
         TextureBackend.reset();
         Browser.reset();
         AppearanceOwnership.reset();

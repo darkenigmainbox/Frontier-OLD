@@ -9,10 +9,12 @@
 #include "UI/Editor/TextureWorkspaceHost.h"
 
 #include "Engine/ContentInterchange/MaterialLibrary.h"
+#include "Engine/ContentInterchange/ProjectSpaceCodec.h"
 #include "Engine/Diagnostics/DiagnosticJournal.h"
 #include "Engine/Interface/IconPresentation.h"
 #include "Engine/Interface/TypefaceRegistry.h"
 #include "Engine/Lifecycle/ActivationSequence.h"
+#include "UI/Editor/ControlCentrePanel.h"
 #include "UI/TextureStudio/MaterialLibraryPanel.h"
 
 #include <imgui.h>
@@ -32,6 +34,9 @@ struct TextureWorkspaceHost::Implementation
     uint64_t RenderingRevision = 0;
     bool CloseLatched = false;
     std::string Diagnostic;
+    ControlCentrePanel *Centre = nullptr;
+    uint64_t ResetRevision = 0;
+    bool LayoutBlocked = false;
     std::set<std::string> FaultedKeys;
     std::function<PlanePoint(PlanePoint)> NavigationEvaluator;
 
@@ -135,6 +140,12 @@ TextureWorkspaceBackend *TextureWorkspaceHost::QueryBackend() const noexcept { r
 void TextureWorkspaceHost::Synchronize()
 {
     if (!IsOpen()) return;
+    if (Impl->Centre && Impl->ResetRevision != Impl->Centre->QueryLayoutResetRevision())
+    {
+        Impl->ResetRevision = Impl->Centre->QueryLayoutResetRevision();
+        Impl->Library->QueryPanels().ResetLayout();
+        Impl->LayoutBlocked = false;
+    }
     Impl->Library->ConfigureInterfaceScale(Impl->InterfaceScale);
     Impl->Library->ConstructInterface();
     if (Impl->Library->ConsumeClose()) Impl->CloseLatched = true;
@@ -193,9 +204,64 @@ bool TextureWorkspaceHost::ConsumeCloseRequest() noexcept
     return std::exchange(Impl->CloseLatched, false);
 }
 
+void TextureWorkspaceHost::ConfigureControlCentre(ControlCentrePanel *Centre) noexcept
+{
+    Impl->Centre = Centre;
+    if (Impl->Centre) Impl->ResetRevision = Impl->Centre->QueryLayoutResetRevision();
+}
+
+bool TextureWorkspaceHost::RestoreLayout(std::string &Diagnostic)
+{
+    Diagnostic.clear();
+    if (!IsOpen()) { Diagnostic = "The texture workspace is not open."; return false; }
+    if (!Impl->Centre) { Diagnostic = "The texture workspace has no control centre."; return false; }
+    if (Impl->Library->QueryPanels().QuerySeated())
+    {
+        Diagnostic = "The texture layout is already seated; restore before the first frame.";
+        return false;
+    }
+    const auto &Path = Impl->Centre->QueryPersonalProjectPath();
+    if (Path.extension() != ".projectspace") return true;
+    if (!std::filesystem::exists(Path)) return true;
+    ProjectSpaceDocument Document;
+    std::string Message;
+    if (!ProjectSpaceCodec::Decode(Path, Document, Message))
+    {
+        Impl->LayoutBlocked = true;
+        Diagnostic = "Texture layout read refused: " + Message;
+        Impl->Centre->ConfigureLayoutDiagnostic("Texture layout read refused; defaults remain session-only. " + Message);
+        return false;
+    }
+    const auto Saved = Document.Sections["workspace"][TextureWorkspaceLayoutKey];
+    if (!Saved) return true;
+    if (!Saved.is_table() || !Impl->Library->QueryPanels().ConfigureLayout(*Saved.as_table(), Message))
+    {
+        // 📝 A bad table is replaced on the next persist; only unreadable preferences block the session.
+        Diagnostic = "Saved texture layout refused; defaults active, a replacement saves on close.";
+        Impl->Centre->ConfigureLayoutDiagnostic(Diagnostic + (Message.empty() ? "" : " " + Message));
+        return false;
+    }
+    return true;
+}
+
+bool TextureWorkspaceHost::PersistLayout(std::string &Message)
+{
+    Message.clear();
+    if (!IsOpen()) { Message = "The texture workspace is not open."; return false; }
+    if (!Impl->Centre) { Message = "The texture workspace has no control centre."; return false; }
+    if (Impl->LayoutBlocked) { Message = "Texture layout save refused: preferences are unreadable."; return false; }
+    if (Impl->Centre->QueryPersonalProjectPath().extension() != ".projectspace") return true;
+    if (!Impl->Library->QueryPanels().QuerySeated()) return true;
+    const auto Layout = Impl->Library->QueryPanels().EncodeLayout();
+    if (Layout.empty()) return true;
+    return Impl->Centre->PersistWorkspaceLayout(Layout, Message, TextureWorkspaceLayoutKey);
+}
+
 void TextureWorkspaceHost::ConfigurePlatform()
 {
-    if (IsOpen()) Impl->Library->ConfigurePlatform();
+    if (!IsOpen()) return;
+    if (Impl->Centre) Impl->Library->QueryPanels().ConfigureDetachedWindows(Impl->Centre->QueryDetachedWindows());
+    Impl->Library->ConfigurePlatform();
 }
 
 void TextureWorkspaceHost::RecoverPlatformWindows()

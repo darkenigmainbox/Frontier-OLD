@@ -3,7 +3,9 @@
 // evidence. Headless: no Vulkan device, no window; the null-backend seams stay unbound and the panels still draw.
 
 #include "UI/Editor/TextureWorkspaceHost.h"
+#include "UI/Editor/ControlCentrePanel.h"
 #include "UI/TextureStudio/MaterialLibraryPanel.h"
+#include "Engine/ContentInterchange/ProjectSpaceCodec.h"
 #include "Engine/Interface/TypefaceRegistry.h"
 #include "Exhibits/ControlCentre/Code/CpuRasterization.h"
 
@@ -69,6 +71,9 @@ int main(int ArgumentCount, char** Arguments)
         ImGuiIO& IO = ImGui::GetIO();
         IO.DisplaySize = ImVec2(1560.0f, 1000.0f);
         IO.DeltaTime = 1.0f / 60.0f;
+        // The Vulkan backend reports RendererHasTextures, so the font atlas never locks; mirror that headless or
+        // fonts added after the first frame (ControlCentre registries) cannot bake sizes and crash text rendering.
+        IO.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
         TypefaceRegistry   FontRegistry;
         static const char* WantedFonts[] = { "DM Sans", "JetBrains Mono" };
         const char*        ArchiveRoot   = ArgumentCount >= 3 ? Arguments[2] : "EngineContent/FontArchives";
@@ -232,6 +237,83 @@ int main(int ArgumentCount, char** Arguments)
             Image.write(reinterpret_cast<const char*>(Pixels.data()), static_cast<std::streamsize>(Pixels.size()));
             if (!Image) throw std::runtime_error("Could not write Texture Workspace host PPM evidence");
         }
+        // 11. Layout persistence round-trips through the linked control centre's personal projectspace.
+        ControlCentrePanel Appearance(ArchiveRoot, Scratch / "Personal.projectspace");
+        Confirm(Appearance.Initialize() && Appearance.Activate(), "The validation appearance failed to activate");
+        Host.ConfigureControlCentre(&Appearance);
+        std::string LayoutMessage;
+        Confirm(Host.PersistLayout(LayoutMessage), ("Persist refused the seated layout: " + LayoutMessage).c_str());
+        Confirm(LayoutMessage.empty(), "A persisted layout carried a message");
+        Confirm(std::filesystem::is_regular_file(Scratch / "Personal.projectspace"), "Persist wrote no preferences file");
+        {
+            std::ifstream Prefs(Scratch / "Personal.projectspace");
+            const std::string PrefsText((std::istreambuf_iterator<char>(Prefs)), std::istreambuf_iterator<char>());
+            Confirm(PrefsText.find(TextureWorkspaceLayoutKey) != std::string::npos,
+                "The preferences file holds no texture layout section");
+        }
+        // Session-only (no personal projectspace) persists silently.
+        ControlCentrePanel SessionOnly(ArchiveRoot, std::filesystem::path{});
+        Confirm(SessionOnly.Initialize() && SessionOnly.Activate(), "The session-only appearance failed to activate");
+        Host.ConfigureControlCentre(&SessionOnly);
+        Confirm(Host.PersistLayout(LayoutMessage), "A session-only persist refused");
+        Confirm(LayoutMessage.empty(), "A session-only persist carried a message");
+
+        // 12. Restore applies the saved layout pre-seat, refuses once seated, and isolates bad saves.
+        Host.Close();
+        Confirm(Host.Open(Scratch, &Refusal), ("Reopen refused the scratch library: " + Refusal).c_str());
+        Host.ConfigureControlCentre(&Appearance);
+        std::string LayoutDiagnostic;
+        Confirm(Host.RestoreLayout(LayoutDiagnostic), ("Restore refused the saved layout: " + LayoutDiagnostic).c_str());
+        Confirm(Host.QueryState().EntryCount == 2, "A restored host miscounted the catalogue");
+        for (int Tick = 0; Tick < 8; ++Tick) Frame();
+        Confirm(!Host.RestoreLayout(LayoutDiagnostic), "Restore accepted a seated layout");
+        Confirm(!LayoutDiagnostic.empty(), "A seated restore carried no diagnostic");
+        // A bad table refuses without blocking the session: a later valid restore still applies.
+        {
+            ProjectSpaceDocument Saved;
+            std::string CodecMessage;
+            Confirm(ProjectSpaceCodec::Decode(Scratch / "Personal.projectspace", Saved, CodecMessage),
+                ("The saved preferences did not decode: " + CodecMessage).c_str());
+            auto* SavedSection = Saved.Sections["workspace"][TextureWorkspaceLayoutKey].as_table();
+            Confirm(SavedSection != nullptr, "The saved preferences hold no texture layout table");
+            SavedSection->insert_or_assign("format", int64_t(2));
+            Confirm(ProjectSpaceCodec::Encode(Scratch / "Bogus.projectspace", Saved, CodecMessage),
+                ("The bogus preferences did not encode: " + CodecMessage).c_str());
+        }
+        ControlCentrePanel BogusAppearance(ArchiveRoot, Scratch / "Bogus.projectspace");
+        Confirm(BogusAppearance.Initialize() && BogusAppearance.Activate(), "The bogus appearance failed to activate");
+        Host.Close();
+        Confirm(Host.Open(Scratch, &Refusal), ("Reopen refused the scratch library: " + Refusal).c_str());
+        Host.ConfigureControlCentre(&BogusAppearance);
+        Confirm(!Host.RestoreLayout(LayoutDiagnostic), "Restore accepted a bad layout table");
+        Confirm(!LayoutDiagnostic.empty(), "A refused table carried no diagnostic");
+        Host.ConfigureControlCentre(&Appearance);
+        Confirm(Host.RestoreLayout(LayoutDiagnostic), "A refused table blocked a later valid restore");
+        // Unreadable preferences refuse the restore and block saving for the session.
+        {
+            std::ofstream Corrupt(Scratch / "Corrupt.projectspace", std::ios::binary);
+            Corrupt << "[[[ this is not a projectspace";
+        }
+        ControlCentrePanel CorruptAppearance(ArchiveRoot, Scratch / "Corrupt.projectspace");
+        Confirm(CorruptAppearance.Initialize() && CorruptAppearance.Activate(), "The corrupt appearance failed to activate");
+        Host.Close();
+        Confirm(Host.Open(Scratch, &Refusal), ("Reopen refused the scratch library: " + Refusal).c_str());
+        Host.ConfigureControlCentre(&CorruptAppearance);
+        Confirm(!Host.RestoreLayout(LayoutDiagnostic), "Restore accepted unreadable preferences");
+        Confirm(!LayoutDiagnostic.empty(), "A refused restore carried no diagnostic");
+        Confirm(!Host.PersistLayout(LayoutMessage), "Persist saved while blocked");
+        Confirm(!LayoutMessage.empty(), "A blocked persist carried no message");
+
+        // 13. A null control centre link is safe across ticks and platform updates.
+        Host.ConfigureControlCentre(nullptr);
+        Host.ConfigurePlatform();
+        for (int Tick = 0; Tick < 4; ++Tick) Frame();
+        Confirm(!Host.RestoreLayout(LayoutDiagnostic), "Restore reached an unlinked host");
+        Confirm(!Host.PersistLayout(LayoutMessage), "Persist reached an unlinked host");
+        Host.Close();
+        Confirm(!Host.RestoreLayout(LayoutDiagnostic), "Restore reached a closed host");
+        Confirm(!Host.PersistLayout(LayoutMessage), "Persist reached a closed host");
+
         Host.Close();
         std::filesystem::remove_all(Scratch, Status);
         std::puts("TextureWorkspaceHostValidation: all host checks passed.");

@@ -26,8 +26,14 @@
 namespace Frontier
 {
 
+class ControlCentrePanel;
 class MaterialLibraryPanel;
 struct CompiledSurfaceMaterial;
+
+// 📝 Personal-projectspace section key for the embedded texture layout. Deliberately distinct from the standalone
+//    workspace's "texture_studio_layout": the embedded dock arrangement lives in a different window and must neither
+//    inherit nor overwrite it.
+inline constexpr const char *TextureWorkspaceLayoutKey = "frontier_texture_layout";
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                  WORKSPACE BACKEND SEAM
@@ -101,11 +107,23 @@ public:
     void ConfigureInterfaceScale(float Scale) noexcept;
     // 📝 Pointer-delta evaluator for preview navigation (frontier binds its ControlCentre input; identity when unset).
     void ConfigureNavigation(std::function<PlanePoint(PlanePoint)> Evaluator);
+    // 📝 Control centre link (nullable): feeds per-frame detached-window propagation and layout-reset handling, and
+    //    sources the personal projectspace for RestoreLayout()/PersistLayout(). Frontier binds its appearance at open.
+    void ConfigureControlCentre(ControlCentrePanel *Centre) noexcept;
     bool SelectMaterial(const std::filesystem::path &RelativePath);
     // 📝 True latches the close immediately (clean library); false parks it behind the panel's Unsaved-material popup,
     //    whose Discard/Save decision arrives through ConsumeCloseRequest().
     bool RequestClose();
     bool ConsumeCloseRequest() noexcept;
+    // 📝 Restore the saved embedded layout from the linked control centre's personal projectspace. Call right after
+    //    Open(), before the first Synchronize() seats the dockspace. True when a layout was applied or nothing needed
+    //    restoring (first run, session-only, no saved section); false (Diagnostic set) when closed, unlinked, already
+    //    seated, or the saved data was refused (unreadable preferences block saving for the session; a bad table is
+    //    replaced on the next persist).
+    bool RestoreLayout(std::string &Diagnostic);
+    // 📝 Persist the current dock arrangement under TextureWorkspaceLayoutKey. Best-effort and silent (true) when there
+    //    is nothing to save yet; false (Message set) when closed, unlinked, blocked, or the write was refused.
+    bool PersistLayout(std::string &Message);
 
     void ConfigurePlatform();
     void RecoverPlatformWindows();
