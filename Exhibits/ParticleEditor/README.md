@@ -70,6 +70,17 @@ repulsor, a drag volume and a current) are added from the Force Field page and d
 
 ![Preset library](Images/EditorPresetLibrary.jpg)
 
+## Everest main Scene Viewport overlay
+
+These captures are also kept in this folder so the particle evidence view includes the C++ main-viewport integration. The
+level's default Particles record drives a transparent particle image over the live Everest scene; camera pose, field of view
+and render extent follow the Scene Viewport. The full implementation and validation details are in
+`Exhibits/SceneViewport/README.md`.
+
+![Everest Scene Viewport with particles alpha-composited over the scene](Images/EverestParticleOverlay.png)
+
+[Normals inspection](Images/EverestParticleOverlay-Normals.png) · [Direct shading](Images/EverestParticleOverlay-Direct.png)
+
 ## Engine captures
 
 960 × 540, SwiftShader, 1/60 s refreshes; figures from `Results/EngineCaptures.tsv`. The prototype's default scene
