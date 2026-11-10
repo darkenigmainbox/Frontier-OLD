@@ -93,6 +93,8 @@ struct ParticleRefreshJob
 struct ParticleRefreshPlan
 {
     ParticleCameraReading                  Camera;
+    bool                                   SharedFieldActive = false;
+    std::array<double, 3>                  SharedFieldOriginMetres{}; // native ForceField axes; particle domain origin in level space
     ParticleRefreshConstants               Constants{};
     ParticleWindComponents                 Components{};
     ParticleAccelerationBlock              Fields{};
@@ -115,12 +117,11 @@ struct ParticleRefreshPlan
 //                                                    SPACE
 //------------------------------------------------------------------------------------------------------------------------
 
-// 📝 The level's Force Field (100 m to 100 km) at the place the particle domain stands in the level: sampled by the host each
-//    refresh while the space follows it, and added to the lattice as one more prevailing flow (its horizontal part: the
-//    lattice's flows are horizontal).
+// 📝 The level's Force Field at the place the particle domain stands in the level. When followed, the native sampler drives
+//    the full 3D wind lattice; the legacy local flow list is bypassed (particle-specific acceleration/damping fields remain).
 struct ParticleLevelWind
 {
-    bool                                 Follow       = false;
+    bool                                 Follow       = true;
     std::array<double, 3>                AnchorMetres = { 0.0, 0.0, 2.0 };   // level axes (z up)
     std::optional<std::array<double, 3>> FlowMps;                            // domain axes (y up); not stored
 };
@@ -142,8 +143,8 @@ public:
     //    scene when Presets is empty).
     void ConstructDefault(const ParticleEffectLibrary& Library, const std::vector<std::string>* Presets = nullptr);
 
-    // 📝 Level force-field coupling: samples the level's IFieldSampler at the level-wind anchor (world axes, z up) and
-    //    stores the flow as the level wind (domain axes, y up), so a Particles record follows the level's ForceField.
+    // 📝 Samples the native level field at the anchor for the Wind-page readout. The GPU sequence samples the same sampler
+    //    throughout the particle domain, rather than copying ForceSource records into this space.
     void SampleLevelForceField(const IFieldSampler& Field);
 
     ParticleEffectInstance* AddEffect(const ParticleEffectLibrary& Library, std::string_view PresetIdentifier);
@@ -157,9 +158,10 @@ public:
     std::array<double, 3> StrikeNow();
 
     // 📝 Advances the clock by one interface tick (clamped to 50 ms as the prototype does) and packs the refresh. A host scene
-    //    may override the editor's orbit camera with its live pose and field of view.
+    //    may override the editor's orbit camera and supply the level's shared ForceField sampler.
     ParticleRefreshPlan Advance(double RealDeltaSeconds, uint32_t ViewWidth, uint32_t ViewHeight,
-                                 const ParticleCameraPose* CameraOverride = nullptr);
+                                 const ParticleCameraPose* CameraOverride = nullptr,
+                                 const IFieldSampler* SharedFieldSampler = nullptr);
 
     // 📝 The domain box, each visible effect's origin cross (amber when selected), molecular boxes and the probe.
     [[nodiscard]] std::vector<float> ConstructGuides() const;

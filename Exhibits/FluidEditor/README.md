@@ -65,10 +65,56 @@ is Vite on `0.0.0.0:5173`.
 
 ![Fluid Editor WebGL2 workspace capture](./Images/Verification-2026-11-09/VerifiedWorkspace.png)
 
+## Multi-view render proofs — 2026-11-09
+
+Four images crop the actual Fluid viewport in perspective, front, side, and top camera presets; the fifth is the full 1920×1080 editor window. All four crops use the same settled lightweight-plume preset (`low_gpu_performance`): 24³ grid, 54 solver steps, 1.504 s simulated time, then paused for consistent angles. They were captured from the browser editor's WebGL2 renderer on SwiftShader; readback reported no GL error or lost context.
+
+| Region | Evidence |
+|---|---|
+| Perspective viewport | [`01-PerspectiveViewport.png`](./Images/RenderProofs-2026-11-09/01-PerspectiveViewport.png) |
+| Front viewport | [`02-FrontViewport.png`](./Images/RenderProofs-2026-11-09/02-FrontViewport.png) |
+| Side viewport | [`03-SideViewport.png`](./Images/RenderProofs-2026-11-09/03-SideViewport.png) |
+| Top viewport | [`04-TopViewport.png`](./Images/RenderProofs-2026-11-09/04-TopViewport.png) |
+| Full workspace window | [`05-WorkspaceWindow.png`](./Images/RenderProofs-2026-11-09/05-WorkspaceWindow.png) |
+
+These are browser-prototype render proofs, not evidence that the separate native C++ Fluid UI launches or controls `FluidSimulationSequence`; that integration remains out of scope here.
+
+## Native C++ GPU simulation (2026-11-09)
+
+A separate native Fluid execution path now lives in `Frontier/Engine/Rendering/FluidSimulation/` and uses Slang compute shaders
+under `Frontier/Engine/Shaders/FluidSimulation/`. The GPU sequence keeps velocity, smoke, vapor, temperature, divergence, and
+pressure in Vulkan 3D textures. Its dispatch sequence applies queued radial sources and the native level `IFieldSampler`, performs
+semi-Lagrangian advection and stable scalar diffusion, solves pressure with Jacobi iterations, and projects velocity. The native
+ForceField is sampled at Fluid cell centres on the host only to upload its field as a GPU input texture; Fluid state evolution is
+performed by `.slang` compute. `FluidSpace` retains the authored source queue and an initial/latest-readback cell snapshot; GPU
+readback is explicit and does not run a CPU simulation step. Fluid burst events collected from that readback still route through
+`ParticleTriggerRouter::DispatchFluidBurst` into `ParticleSpace`.
+
+`FluidSimulationGpuValidation` ran on the pinned SwiftShader Vulkan device and passed: source transport, native ForceField coupling,
+GPU pressure projection, explicit readback, volume preview, disabled-sampler fallback, and burst routing. RMS divergence changed
+from `0.424441` to `0.357503` for the validation field. Seven Fluid SPIR-V entries are stored in
+`EngineContent/ShaderArchives/FluidSimulation/` and verified against their `.slang` sources. SwiftShader is a software Vulkan
+device; physical hardware GPU execution has not been tested. `FluidSpaceValidation` separately covers the `.fluidspace` codec,
+queued inputs, a direct world-space ForceField sample used by Particle coupling, and Fluid-to-Particle burst routing.
+
+With CMake, the targeted reproduction is:
+
+```bash
+cmake --build build/forcefield-workspace --target FluidSimulationGpuValidation
+ctest --test-dir build/forcefield-workspace -R '^(FluidSpaceValidation|FluidSimulationGpuValidation)$' --output-on-failure
+python Automation/StoreShaderArchives.py --verify --sets FluidSimulation
+```
+
+The CTest sets the pinned SwiftShader Vulkan loader and ICD when the restored runtime exists under
+`ExternalPackages/VulkanCompute/SwiftShader/`.
+
+The existing Fluid browser app and C++ native sequence are **not connected**. The browser verification above covers its own WebGL2
+prototype only, and the existing native Fluid UI shell still does not launch or control `FluidSimulationSequence`. Do not interpret
+the GPU validation as evidence of live Fluid editor UI integration.
+
 ## Limits
 
-- This is browser prototype execution, not native C++ editor UI.
-- Software SwiftShader WebGL is the exercised renderer; the optional WebGPU selection correctly falls back to WebGL2 in this headless environment.
-- The restored JavaScript solver is not connected to this checkout's C++ `FluidSpace` or `FluidSimulationSequence`.
+- This is browser prototype execution, not native C++ editor UI. The browser simulation/rendering remains separate from the native GPU sequence.
+- Software SwiftShader WebGL is the browser test renderer; its optional WebGPU selection falls back to WebGL2. The native C++ compute test uses the pinned SwiftShader Vulkan device.
 - Windows/MSVC and native hardware GPU execution were not run.
 - The screenshot shows the actual browser rendering at the end of the verification interactions; it is not a mockup or a native editor capture.

@@ -40,7 +40,9 @@ struct SpaceSchema<PlanetaryWindProfile>
             MakeClampedField("swirl_strength", &W::SwirlStrength, 0.0, 5.0),
             MakeFieldBinding("seed", &W::Seed),
             MakeClampedField("mesoscale_scale_m", &W::MesoscaleScaleMeters, 0.0, 500000.0),
-            MakeClampedField("mesoscale_strength", &W::MesoscaleStrength, 0.0, 1.0));
+            MakeClampedField("mesoscale_strength", &W::MesoscaleStrength, 0.0, 1.0),
+            MakeFieldBinding("bounded", &W::Bounded),
+            MakeClampedField("region_radius_m", &W::RegionRadiusMeters, 100.0, 50000.0));
     }
 };
 

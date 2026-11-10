@@ -84,7 +84,8 @@ void ParticleEditor::ConstructInterface(RecordToken Token, ParticleConfiguration
     ParticleEditorWorkspace& Workspace = *ResolveWorkspace();
     InspectorRuntime&        Runtime   = InspectorRuntime::Instance();
     Workspace.Presenter                = Runtime.QueryParticleViewportPresenter();
-    Workspace.LevelFlow                = Runtime.QueryLevelFlowSampler();
+    Workspace.LevelFieldSampler        = [] { return InspectorRuntime::Instance().AcquireLevelFieldSampler(); };
+    Workspace.LevelFieldAvailable       = static_cast<bool>(Runtime.QueryLevelFieldSamplerProvider());
 
     // 📝 The record's space: named on first use (the level then saves the name), read or created beside the level.
     if (!Runtime.QueryLevelFile().empty())

@@ -5,23 +5,23 @@
 //    outliner, quick photometry chips, lens/camera HUD, luminaire stage, diurnal transport, console drawer, light &
 //    environment inspector, IES goniometer matrix) over local view state only. The staged light/env copies mirror
 //    the prototype's rig fields (Experimental Remastered/PhotometricEditor); value controls edit those copies and
-//    log keyed PARAM lines, and nothing else. Every command that would mutate the scene or reach the engines or the
-//    filesystem (add/duplicate/delete luminaire, load .ies, export .ies, export rig, cross-studio suite links) is an
-//    explicit NOOP: it raises a toast, appends a warm log line, and changes nothing. Rig tabs, quick chips, lenses,
-//    cameras, transport, scrub, matrix profile picks, and filters are silent local view state. Only the census,
-//    flux badges, wall-lux estimate, moon metrics, and solar ephemeris are live, because they derive from
-//    shell-local closed-form estimators. The workspace makes no engine, shader, or renderer calls; the stage
-//    markers, cones, and polar webs are static decor, honestly labelled in the viewport corner.
+//    log keyed PARAM lines. Loading .ies parses a bounded LM-63 Type-C TILT=NONE profile into workspace-local
+//    memory, assigns it to an IES light, draws measured C0/C90 curves, and updates the shell wall-lux estimate; it
+//    does not mutate scene data or persist. Duplicate/delete luminaire, export .ies, export rig, and cross-studio
+//    suite links remain explicit NOOPs. The workspace makes no engine, shader, or renderer calls; stage markers,
+//    cones, and polar webs are static decor, honestly labelled in the viewport corner.
 
 #pragma once
 
 #include "Frontier/Engine/Interface/Workspaces/AssetBrowserWorkspace.h"
+#include "Frontier/Engine/Photometry/PhotometricIes.h"
 
 #include <imgui.h>
 
 #include <deque>
 #include <map>
 #include <string>
+#include <vector>
 
 namespace Frontier
 {
@@ -81,7 +81,8 @@ struct PhotometricLightProps
     double Cone        = 58.0;   // deg field angle
     double Cutoff      = 0.0;    // deg pitch
     int    PresetProfile   = 3;  // 🧩 Index into the 8 analytical presets.
-    int    MeasuredProfile = 0;  // 🧩 Index into the 7 LM-63 profiles.
+    int    MeasuredProfile = 0;  // 🧩 Index into the 7 bundled LM-63 profiles.
+    int    CustomIesProfile = -1; // 🧩 Index into PhotometricWorkspaceState::LoadedIesProfiles, or -1.
     bool   UseMeasuredIes  = true;
     int    Aperture = 0; // 🧩 0 rectangle, 1 disk.
     double Width  = 2.0; // m
@@ -219,7 +220,9 @@ void EvaluatePhotometricSun(const PhotometricSunProps& Props, PhotometricSunSolv
 void SolvePhotometricMoon(const PhotometricMoon& Moon, PhotometricMoonMetrics& Metrics) noexcept;
 [[nodiscard]] double QueryPhotometricFlux(int Type, const PhotometricLightProps& Props) noexcept;
 [[nodiscard]] double QueryPhotometricCensusLumens(const PhotometricLight* Lights, int Count) noexcept;
-[[nodiscard]] double QueryPhotometricWallLux(const PhotometricLight* Lights, int Count) noexcept;
+[[nodiscard]] double QueryPhotometricWallLux(const PhotometricLight* Lights, int Count,
+                                              const PhotometricIesProfile* ImportedProfiles = nullptr,
+                                              int ImportedProfileCount = 0) noexcept;
 
 struct PhotometricWorkspaceLogEntry
 {
@@ -306,6 +309,11 @@ struct PhotometricWorkspaceState
     bool ExportIesNoopRaised = false; // 🧩 Latched by validation: exports stay explicit NOOPs.
     bool ExportRigNoopRaised = false;
 
+    std::vector<PhotometricIesProfile> LoadedIesProfiles;
+    bool LoadIesPopupRequested = false;
+    char LoadIesPath[768] = {};
+    std::string LoadIesError;
+
     enum
     {
         CardPreview = 0,
@@ -329,6 +337,8 @@ struct PhotometricWorkspaceState
 };
 
 void        ConstructPhotometricWorkspaceState(PhotometricWorkspaceState& State);
+[[nodiscard]] bool LoadPhotometricWorkspaceIes(PhotometricWorkspaceState& State, const std::string& Utf8Path,
+                                               std::string& Error);
 void        AppendPhotometricWorkspaceLog(PhotometricWorkspaceState& State, const char* Channel, const char* Message);
 void        NoopPhotometricWorkspaceCommand(PhotometricWorkspaceState& State, const char* Channel, const char* Message,
                                             const char* ToastText);

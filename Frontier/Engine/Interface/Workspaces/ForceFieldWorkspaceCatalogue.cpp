@@ -7,6 +7,7 @@
 
 #include "Engine/Interface/Workspaces/ForceFieldWorkspace.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -421,63 +422,269 @@ void AppendForceFieldWorkspaceLog(ForceFieldWorkspaceState& State, const char* C
     while (State.Log.size() > 80) State.Log.pop_back();
 }
 
-void NoopForceFieldWorkspaceAction(ForceFieldWorkspaceState& State, const char* Channel, const char* Message)
-{
-    AppendForceFieldWorkspaceLog(State, Channel, Message, "NOOP in this shell");
-}
-
 //------------------------------------------------------------------------------------------------------------------------
 //                                                    DEFAULT STATE
 //------------------------------------------------------------------------------------------------------------------------
 
+namespace
+{
+
+void SetWorkspaceParameter(ForceFieldWorkspaceSource& Source, const char* Key, double Value)
+{
+    const ForceFieldWorkspaceType& Type = QueryForceFieldType(Source.Type);
+    for (int Index = 0; Index < Type.ParamCount && Index < 7; ++Index)
+    {
+        if (Type.Params[Index].Key != nullptr && std::strcmp(Type.Params[Index].Key, Key) == 0)
+        {
+            Source.Params[Index] = Value;
+            return;
+        }
+    }
+}
+
+ForceFieldWorkspaceSource MakeWorkspaceSource(const char* TypeId, const char* Name, double X, double Y, double Z)
+{
+    const int Type = QueryForceFieldTypeById(TypeId);
+    return ConstructLabSource(Type, Name, X, Y, Z);
+}
+
+} // namespace
+
+void ApplyForceFieldWorkspacePreset(ForceFieldWorkspaceState& State, int Scenario)
+{
+    const std::shared_ptr<ForceFieldWorkspaceRuntime> Runtime = State.Runtime;
+    const std::string ExportPath = State.ExportPath;
+    State = ForceFieldWorkspaceState{};
+    State.Runtime = Runtime;
+    if (!ExportPath.empty()) State.ExportPath = ExportPath;
+    State.ExportPreview.clear();
+    State.ExportStatus = "Preset reset; export the current workspace when ready.";
+    State.Scenario = std::clamp(Scenario, 0, 3);
+    State.ClockTime = 0.0;
+    State.ClockPlaying = true;
+    State.ClockRate = 1;
+    State.TimelineDuration = 60.0;
+    State.View.Span = 1400.0;
+    State.View.CentreX = 0.0;
+    State.View.CentreZ = 0.0;
+    State.View.Yaw = 0.7853981633974483;
+    State.View.Pitch = 0.62;
+
+    if (State.Scenario == 0)
+    {
+        ForceFieldWorkspaceSource East = MakeWorkspaceSource("WindGenerator", "Wind Generator East", -330.0, 0.0, 50.0);
+        East.Bearing = 66.0;
+        East.Params[0] = 18.0;
+        East.Radius = 245.0;
+        East.Reach = ForceFieldReachColumn;
+
+        ForceFieldWorkspaceSource Vortex = MakeWorkspaceSource("Tornado", "Vortex Column", 55.0, 0.0, -45.0);
+        Vortex.Params[0] = 42.0;
+        Vortex.Params[1] = 24.0;
+        Vortex.Params[2] = 72.0;
+        Vortex.Params[3] = 12.0;
+        Vortex.Params[4] = 24.0;
+        Vortex.Params[6] = 0.0;
+        Vortex.Radius = 250.0;
+
+        ForceFieldWorkspaceSource Corridor = MakeWorkspaceSource("Jet", "Jet Corridor", -120.0, 8.0, -280.0);
+        Corridor.Bearing = 108.0;
+        Corridor.Params[1] = 180.0;
+        Corridor.Params[2] = 26.0;
+        Corridor.Radius = 210.0;
+
+        ForceFieldWorkspaceSource Attractor = MakeWorkspaceSource("Attractor", "Attractor", 340.0, 10.0, 130.0);
+        Attractor.Params[0] = 11.0;
+        Attractor.Params[1] = 4.8;
+        Attractor.Radius = 210.0;
+
+        ForceFieldWorkspaceSource Repulsor = MakeWorkspaceSource("Repulsor", "Repulsor", 230.0, 10.0, -230.0);
+        Repulsor.Params[0] = 12.0;
+        Repulsor.Radius = 175.0;
+
+        ForceFieldWorkspaceSource Impulse = MakeWorkspaceSource("Blast", "Impulse Shell", -60.0, 2.0, 260.0);
+        Impulse.Params[0] = 36.0;
+        Impulse.Radius = 240.0;
+        Impulse.Activation = ForceFieldActivationWindow;
+        Impulse.Begins = 3.0;
+        Impulse.Lasts = 10.0;
+        Impulse.Repeats = 24.0;
+        State.Sources = {East, Vortex, Corridor, Attractor, Repulsor, Impulse};
+        State.Wind.Enabled = false;
+    }
+    else if (State.Scenario == 1)
+    {
+        ForceFieldWorkspaceSource West = MakeWorkspaceSource("WindGenerator", "Western Wind Generator", -430.0, 10.0, 0.0);
+        West.Bearing = 90.0;
+        West.Params[0] = 16.0;
+        West.Radius = 320.0;
+        West.Height = 220.0;
+        ForceFieldWorkspaceSource East = MakeWorkspaceSource("WindGenerator", "Eastern Wind Generator", 430.0, 10.0, 0.0);
+        East.Bearing = 270.0;
+        East.Params[0] = 14.0;
+        East.Radius = 320.0;
+        East.Height = 220.0;
+        ForceFieldWorkspaceSource Jet = MakeWorkspaceSource("Jet", "Venturi Corridor", 0.0, 10.0, 0.0);
+        Jet.Bearing = 90.0;
+        Jet.Radius = 520.0;
+        Jet.Params[0] = 18.0;
+        Jet.Params[1] = 900.0;
+        Jet.Params[2] = 40.0;
+        ForceFieldWorkspaceSource Current = MakeWorkspaceSource("Current", "Crosswind Channel", 0.0, 10.0, 360.0);
+        Current.Bearing = 270.0;
+        Current.Radius = 480.0;
+        Current.HalfX = 90.0;
+        Current.HalfZ = 420.0;
+        Current.Params[0] = 7.0;
+        State.Sources = {West, East, Jet, Current};
+        State.Wind.Enabled = true;
+        State.Wind.Bounded = true;
+        State.Wind.RegionRadius = 2600.0;
+        State.Wind.Bearing = 90.0;
+        State.Wind.Speed = 3.5;
+        State.View.Span = 2200.0;
+    }
+    else if (State.Scenario == 2)
+    {
+        static const char* StormTypes[14] = {"WindGenerator", "Tornado", "Jet", "GustFront", "Microburst", "Thermal", "Puff",
+                                             "Blast", "Wake", "Current", "Attractor", "Repulsor", "Lift", "Gravity"};
+        for (int Index = 0; Index < 14; ++Index)
+        {
+            const double Angle = (2.0 * 3.14159265358979323846 * Index) / 14.0;
+            const double X = std::cos(Angle) * 1800.0;
+            const double Z = std::sin(Angle) * 1800.0;
+            const int Type = QueryForceFieldTypeById(StormTypes[Index]);
+            char Name[96]{};
+            std::snprintf(Name, sizeof(Name), "%s %02d", QueryForceFieldType(Type).Name, Index + 1);
+            State.Sources.push_back(ConstructLabSource(Type, Name, X, (Index % 4) * 18.0, Z));
+            ForceFieldWorkspaceSource& Source = State.Sources.back();
+            Source.Bearing = std::fmod(25.0 + Index * 31.0, 360.0);
+            if (std::strcmp(StormTypes[Index], "WindGenerator") == 0)
+            {
+                Source.Params[0] = 24.0;
+                Source.Radius = 1250.0;
+                Source.Height = 700.0;
+                Source.Bearing = 135.0;
+            }
+            if (std::strcmp(StormTypes[Index], "Blast") == 0)
+            {
+                Source.Activation = ForceFieldActivationWindow;
+                Source.Begins = 8.0;
+                Source.Lasts = 16.0;
+                Source.Repeats = 36.0;
+            }
+        }
+        State.Wind.Enabled = true;
+        State.Wind.Bounded = false;
+        State.Wind.RegionRadius = 50000.0;
+        State.Wind.Bearing = 133.0;
+        State.Wind.Speed = 22.0;
+        State.Wind.GustAmplitude = 8.5;
+        State.Wind.GustStrength = 0.37;
+        State.Wind.GustFrequency = 0.23;
+        State.Wind.Turbulence = 0.62;
+        State.Wind.TurbulenceScale = 91.0;
+        State.Wind.Shear = 0.28;
+        State.Wind.Veer = -12.0;
+        State.Wind.MesoscaleStrength = 0.31;
+        State.Wind.MesoscaleScale = 32000.0;
+        State.Wind.Seed = 9191;
+        State.TimelineDuration = 120.0;
+        State.View.Span = 100000.0;
+    }
+    else
+    {
+        // The build preset is intentionally empty: the library remains available, but no hidden sources or ambient wind
+        // are authored until the user adds them.
+        State.Sources.clear();
+        State.Wind.Enabled = false;
+        State.Wind.Bounded = true;
+        State.Selected = ForceFieldWorkspaceState::SelectedField;
+    }
+
+    State.Selected = State.Sources.empty() ? ForceFieldWorkspaceState::SelectedField : 0;
+    State.PlacementType = -1;
+    State.View.Solo = -1;
+    State.View.Follow = -1;
+    State.PeakCount = 0;
+    State.WindCount = 0;
+    char Detail[96]{};
+    std::snprintf(Detail, sizeof(Detail), "%d authored sources · %s ambient wind",
+                  static_cast<int>(State.Sources.size()), State.Wind.Enabled ? (State.Wind.Bounded ? "bounded" : "unbounded") : "disabled");
+    AppendForceFieldWorkspaceLog(State, "SCENARIO", "Loaded workspace preset", Detail, "Preset");
+}
+
 void ConstructForceFieldWorkspaceState(ForceFieldWorkspaceState& State)
 {
-    State = ForceFieldWorkspaceState{};
-    // 📝 The 'lab' scene: Wind Generator East + Vortex + Jet + Attractor + Repulsor + Impulse Shell.
-    ForceFieldWorkspaceSource East = ConstructLabSource(0, "Wind Generator East", -330.0, 0.0, 50.0);
-    East.Bearing      = 66.0;
-    East.Params[0]    = 18.0;
-    East.Radius       = 245.0;
-    East.Reach        = ForceFieldReachColumn;
-    ForceFieldWorkspaceSource Vortex = ConstructLabSource(1, "Vortex Column", 55.0, 0.0, -45.0);
-    Vortex.Params[0] = 42.0;
-    Vortex.Params[1] = 24.0;
-    Vortex.Params[2] = 72.0;
-    Vortex.Params[3] = 12.0;
-    Vortex.Params[4] = 24.0;
-    Vortex.Params[6] = 0.0;
-    Vortex.Radius    = 250.0;
-    ForceFieldWorkspaceSource Corridor = ConstructLabSource(2, "Jet Corridor", -120.0, 8.0, -280.0);
-    Corridor.Bearing   = 108.0;
-    Corridor.Params[1] = 180.0;
-    Corridor.Params[2] = 26.0;
-    Corridor.Radius    = 210.0;
-    ForceFieldWorkspaceSource Attractor = ConstructLabSource(10, "Attractor", 340.0, 10.0, 130.0);
-    Attractor.Params[0] = 11.0;
-    Attractor.Params[1] = 4.8;
-    Attractor.Radius    = 210.0;
-    ForceFieldWorkspaceSource Repulsor = ConstructLabSource(11, "Repulsor", 230.0, 10.0, -230.0);
-    Repulsor.Params[0] = 12.0;
-    Repulsor.Radius    = 175.0;
-    ForceFieldWorkspaceSource Impulse = ConstructLabSource(7, "Impulse Shell", -60.0, 2.0, 260.0);
-    Impulse.Params[0]  = 36.0;
-    Impulse.Radius     = 240.0;
-    Impulse.Activation = ForceFieldActivationWindow;
-    Impulse.Begins     = 3.0;
-    Impulse.Lasts      = 10.0;
-    Impulse.Repeats    = 24.0;
-    State.Sources = { East, Vortex, Corridor, Attractor, Repulsor, Impulse };
+    ApplyForceFieldWorkspacePreset(State, 0);
+    AppendForceFieldWorkspaceLog(State, "WORKSPACE", "Force Field + Wind Workspace ready", "Native field sampling enabled");
+}
 
-    // 📝 Canned hero series (the shell samples no lattice): a calm peak wander and a flat wind line.
-    for (int Index = 0; Index < 40; ++Index)
+int AddForceFieldWorkspaceSource(ForceFieldWorkspaceState& State, int Type, double X, double Y, double Z)
+{
+    if (Type < 0 || Type >= QueryForceFieldTypeCount()) return -1;
+    const ForceFieldWorkspaceType& Spec = QueryForceFieldType(Type);
+    std::string Name = Spec.Name != nullptr ? Spec.Name : "Force source";
+    int Suffix = 2;
+    for (;;)
     {
-        State.PeakSamples[Index] = 15.4 + 1.6 * std::sin(Index * 0.42) + 0.5 * std::sin(Index * 1.7);
-        State.WindSamples[Index] = 0.0;
+        const bool Used = std::any_of(State.Sources.begin(), State.Sources.end(), [&](const ForceFieldWorkspaceSource& Source)
+        { return Source.Name == Name; });
+        if (!Used) break;
+        Name = std::string(Spec.Name != nullptr ? Spec.Name : "Force source") + " " + std::to_string(Suffix++);
     }
-    State.PeakCount = 40;
-    State.WindCount = 40;
+    State.Sources.push_back(ConstructLabSource(Type, Name.c_str(), X, Y, Z));
+    State.Selected = static_cast<int>(State.Sources.size()) - 1;
+    char Message[128]{};
+    std::snprintf(Message, sizeof(Message), "Placed %s", Name.c_str());
+    AppendForceFieldWorkspaceLog(State, "PLACE", Message, "Native source added to the workspace", "Place");
+    return State.Selected;
+}
 
-    AppendForceFieldWorkspaceLog(State, "WORKSPACE", "Force Field + Wind Workspace ready (shell)", "6 bounded fields loaded · engine calls disabled");
+bool DuplicateForceFieldWorkspaceSource(ForceFieldWorkspaceState& State, int Index)
+{
+    if (Index < 0 || static_cast<size_t>(Index) >= State.Sources.size()) return false;
+    ForceFieldWorkspaceSource Copy = State.Sources[static_cast<size_t>(Index)];
+    Copy.Centre[0] += std::max(10.0, Copy.Radius * 0.22);
+    Copy.Centre[2] += std::max(10.0, Copy.Radius * 0.22);
+    const std::string BaseName = Copy.Name + " Copy";
+    Copy.Name = BaseName;
+    for (int Suffix = 2; std::any_of(State.Sources.begin(), State.Sources.end(), [&](const ForceFieldWorkspaceSource& Existing)
+                                    { return Existing.Name == Copy.Name; }); ++Suffix)
+        Copy.Name = BaseName + " " + std::to_string(Suffix);
+    State.Sources.push_back(std::move(Copy));
+    State.Selected = static_cast<int>(State.Sources.size()) - 1;
+    AppendForceFieldWorkspaceLog(State, "FORCES", "Duplicated source", State.Sources.back().Name.c_str());
+    return true;
+}
+
+bool RemoveForceFieldWorkspaceSource(ForceFieldWorkspaceState& State, int Index)
+{
+    if (Index < 0 || static_cast<size_t>(Index) >= State.Sources.size()) return false;
+    const std::string Removed = State.Sources[static_cast<size_t>(Index)].Name;
+    State.Sources.erase(State.Sources.begin() + Index);
+    if (State.Sources.empty()) State.Selected = ForceFieldWorkspaceState::SelectedField;
+    else if (State.Selected == Index) State.Selected = std::min(Index, static_cast<int>(State.Sources.size()) - 1);
+    else if (State.Selected > Index) --State.Selected;
+    if (State.View.Solo == Index) State.View.Solo = -1;
+    else if (State.View.Solo > Index) --State.View.Solo;
+    if (State.View.Follow == Index) State.View.Follow = -1;
+    else if (State.View.Follow > Index) --State.View.Follow;
+    AppendForceFieldWorkspaceLog(State, "FORCES", "Removed source", Removed.c_str());
+    return true;
+}
+
+bool FireForceFieldWorkspaceSource(ForceFieldWorkspaceState& State, int Index)
+{
+    if (Index < 0 || static_cast<size_t>(Index) >= State.Sources.size()) return false;
+    ForceFieldWorkspaceSource& Source = State.Sources[static_cast<size_t>(Index)];
+    Source.Activation = ForceFieldActivationTrigger;
+    Source.TriggeredAt = std::max(0.0, State.ClockTime);
+    State.ClockPlaying = true;
+    char Message[128]{};
+    std::snprintf(Message, sizeof(Message), "Fired %s", Source.Name.c_str());
+    AppendForceFieldWorkspaceLog(State, "TRIGGER", Message, "Timeline envelope started", "Fire");
+    return true;
 }
 
 } // namespace Frontier

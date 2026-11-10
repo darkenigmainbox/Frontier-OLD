@@ -1,7 +1,7 @@
 /*==========================================================================================================================================
                                                             FLUIDSPACE.H
 ==========================================================================================================================================*/
-// 🧩 CPU Eulerian fluid field, shared spatial/thermal profiles, and declarative .fluidspace settings.
+// 🧩 Fluid simulation descriptor, host-authored source queue, and readback snapshot for the GPU Eulerian solver.
 
 #pragma once
 
@@ -9,16 +9,14 @@
 #include "Frontier/Engine/Scene/Profiles/ProfileSchemas.h"
 #include "Frontier/Engine/Scene/SpaceCodec.h"
 
-#include <algorithm>
-#include <cmath>
-#include <concepts>
 #include <cstdint>
 #include <string>
-#include <utility>
 #include <vector>
 
 namespace Frontier
 {
+
+inline constexpr uint32_t FluidSourceLimit = 64;
 
 struct FluidSpaceConfiguration
 {
@@ -72,6 +70,7 @@ struct SpaceSchema<FluidSpaceDescriptor>
     }
 };
 
+// 📝 A CPU-side image of a GPU cell, used only for initial-state upload and explicit telemetry/readback.
 struct FluidCell
 {
     Vec3d  AirVelocityMetresPerSecond{};
@@ -89,6 +88,7 @@ struct FluidSourceContribution
     double TemperatureKelvin = 0.0;
 };
 
+// 📝 Authored radial source in world axes. Its rate fields are converted to per-step deltas before GPU upload.
 struct RadialFluidSource
 {
     SpatialProfile Spatial{};
@@ -97,25 +97,14 @@ struct RadialFluidSource
     double SmokeDensityRateKilogramsPerCubicMetreSecond = 0.0;
     double VaporDensityRateKilogramsPerCubicMetreSecond = 0.0;
     double TemperatureRateKelvinPerSecond = 0.0;
+};
 
-    [[nodiscard]] FluidSourceContribution Sample(const Vec3d& WorldPointMetres, double DeltaSeconds) const noexcept
-    {
-        if (!std::isfinite(DeltaSeconds) || DeltaSeconds <= 0.0 || !std::isfinite(RadiusMetres) || RadiusMetres <= 0.0 ||
-            !std::isfinite(WorldPointMetres.X) || !std::isfinite(WorldPointMetres.Y) || !std::isfinite(WorldPointMetres.Z) ||
-            !std::isfinite(Spatial.PositionMetres.X) || !std::isfinite(Spatial.PositionMetres.Y) ||
-            !std::isfinite(Spatial.PositionMetres.Z) || !std::isfinite(AirVelocityMetresPerSecond.X) ||
-            !std::isfinite(AirVelocityMetresPerSecond.Y) || !std::isfinite(AirVelocityMetresPerSecond.Z) ||
-            !std::isfinite(SmokeDensityRateKilogramsPerCubicMetreSecond) ||
-            !std::isfinite(VaporDensityRateKilogramsPerCubicMetreSecond) || !std::isfinite(TemperatureRateKelvinPerSecond))
-            return {};
-        const double SafeRadius = RadiusMetres;
-        const double DistanceMetres = Distance(Spatial.PositionMetres, WorldPointMetres);
-        const double Weight = std::clamp(1.0 - DistanceMetres / SafeRadius, 0.0, 1.0);
-        return { AirVelocityMetresPerSecond * (Weight * DeltaSeconds),
-                 SmokeDensityRateKilogramsPerCubicMetreSecond * Weight * DeltaSeconds,
-                 VaporDensityRateKilogramsPerCubicMetreSecond * Weight * DeltaSeconds,
-                 TemperatureRateKelvinPerSecond * Weight * DeltaSeconds };
-    }
+// 📝 Compact source record consumed by the Fluid compute shader: world centre, radius, and one-step deltas.
+struct FluidQueuedSource
+{
+    Vec3d  CentreWorldMetres{};
+    double RadiusMetres = 1.0;
+    FluidSourceContribution Delta{};
 };
 
 class FluidSpace
@@ -126,6 +115,7 @@ class FluidSpace
 
     [[nodiscard]] const FluidSpaceDescriptor& QueryDescriptor() const noexcept { return Descriptor_; }
     [[nodiscard]] FluidSpaceDescriptor&       AccessDescriptor() noexcept { return Descriptor_; }
+    // 📝 QueryCells is the latest explicit readback, not the live solver state. Construct seeds the GPU from this array.
     [[nodiscard]] const std::vector<FluidCell>& QueryCells() const noexcept { return Cells_; }
     [[nodiscard]] std::vector<FluidCell>&       AccessCells() noexcept { return Cells_; }
     [[nodiscard]] uint32_t QueryCellCountX() const noexcept { return Descriptor_.Configuration.CellCountX; }
@@ -137,38 +127,19 @@ class FluidSpace
     [[nodiscard]] Vec3d  CellWorldPosition(uint32_t X, uint32_t Y, uint32_t Z) const noexcept;
     [[nodiscard]] FluidCell&       AccessCell(uint32_t X, uint32_t Y, uint32_t Z) noexcept;
     [[nodiscard]] const FluidCell& QueryCell(uint32_t X, uint32_t Y, uint32_t Z) const noexcept;
+
+    // 📝 Inject and radial-source calls enqueue inputs; the GPU applies them during its next simulation step.
     void Inject(uint32_t X, uint32_t Y, uint32_t Z, const FluidSourceContribution& Contribution) noexcept;
+    [[nodiscard]] bool EnqueueRadialSource(const RadialFluidSource& Source, double DeltaSeconds) noexcept;
+    [[nodiscard]] const std::vector<FluidQueuedSource>& QueryPendingSources() const noexcept { return PendingSources_; }
+    void ClearPendingSources() noexcept { PendingSources_.clear(); }
     void AdvanceRevision() noexcept { ++Revision_; }
 
   private:
     FluidSpaceDescriptor Descriptor_{};
-    std::vector<FluidCell> Cells_{};
+    std::vector<FluidCell> Cells_{};    // GPU initial values / last explicit readback
+    std::vector<FluidQueuedSource> PendingSources_{};
     uint64_t Revision_ = 0;
-};
-
-class FluidSourceProjector
-{
-  public:
-    template <typename SourceT>
-        requires requires(const SourceT& Source, const Vec3d& Position, double DeltaSeconds) {
-            { Source.Sample(Position, DeltaSeconds) } -> std::same_as<FluidSourceContribution>;
-        }
-    [[nodiscard]] static uint32_t ProjectSource(FluidSpace& Space, const SourceT& Source, double DeltaSeconds)
-    {
-        uint32_t AffectedCells = 0;
-        for (uint32_t Z = 0; Z < Space.QueryCellCountZ(); ++Z)
-            for (uint32_t Y = 0; Y < Space.QueryCellCountY(); ++Y)
-                for (uint32_t X = 0; X < Space.QueryCellCountX(); ++X)
-                {
-                    const FluidSourceContribution Contribution = Source.Sample(Space.CellWorldPosition(X, Y, Z), DeltaSeconds);
-                    if (Contribution.TemperatureKelvin == 0.0 && Contribution.SmokeDensityKilogramsPerCubicMetre == 0.0 &&
-                        Contribution.VaporDensityKilogramsPerCubicMetre == 0.0 && LengthSquared(Contribution.AirVelocityMetresPerSecond) == 0.0)
-                        continue;
-                    Space.Inject(X, Y, Z, Contribution);
-                    ++AffectedCells;
-                }
-        return AffectedCells;
-    }
 };
 
 } // namespace Frontier

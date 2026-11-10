@@ -1,7 +1,7 @@
 #============================================================================================================================================
 #                                                         FORCEFIELDWORKSPACE.CMAKE                                                          
 #============================================================================================================================================
-# ForceField workspace validation: headless interaction checks and PPM evidence for the U1 UI shell.
+# Force Field + Wind workspace validation: native evaluation, Levelspace load round-trip, scripted UI interactions, and PPM evidence.
 
 if(BUILD_TESTING)
     add_executable(ForceFieldWorkspaceValidation

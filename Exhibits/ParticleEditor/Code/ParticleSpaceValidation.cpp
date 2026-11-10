@@ -8,6 +8,7 @@
 //
 //     ParticleSpaceValidation <repository root> <scratch folder>
 
+#include "Engine/PhysicalDynamics/ForceField.h"
 #include "Frontier/Engine/PhysicalDynamics/ParticleDynamics/ParticleSpaceCodec.h"
 
 #include <algorithm>
@@ -73,6 +74,21 @@ bool SameParameters(const ParticleEffectParameters& Left, const ParticleEffectPa
     if (Equal && Left.Attractor) Equal = Same(Left.Attractor->Strength, Right.Attractor->Strength) && Same(Left.Attractor->Swirl, Right.Attractor->Swirl);
     return Equal;
 }
+
+struct CoordinateFieldSampler final : IFieldSampler
+{
+    bool Enabled = true;
+    [[nodiscard]] bool QueryFieldEnabled() const noexcept override { return Enabled; }
+    [[nodiscard]] double QueryGroundPlaneYMeters() const noexcept override { return 0.0; }
+    [[nodiscard]] Vec3d SampleFieldFlow(const Vec3d& Point, double, bool) const noexcept override { return Point; }
+    [[nodiscard]] Vec3d SampleFieldContribution(ForceContribution, const Vec3d&, double, bool, int32_t) const noexcept override { return {}; }
+    [[nodiscard]] FieldPointSample EvaluateFullField(const Vec3d& Point, bool, double) const noexcept override
+    {
+        FieldPointSample Reading;
+        Reading.AirVelocityMps = Point;
+        return Reading;
+    }
+};
 
 } // namespace
 
@@ -270,7 +286,7 @@ int main(int ArgumentCount, char** Arguments)
     Expect(SameJobs == Jobs, "every job uniform of 30 refreshes is identical");
     std::printf("refresh plans: %zu / %zu job uniforms identical over 30 refreshes\n", SameJobs, Jobs);
 
-    // ⑥ the level's Force Field joins the lattice as one more prevailing flow while the space follows it
+    // ⑥ the legacy anchor-sampled fallback adds one prevailing flow when no shared native sampler is supplied
     {
         ParticleSpace Still, Windy, Waiting;
         for (ParticleSpace* Space : { &Still, &Windy, &Waiting }) Space->ConstructDefault(Library);
@@ -291,7 +307,80 @@ int main(int ArgumentCount, char** Arguments)
                "the file keeps following and the anchor, never the sampled flow");
     }
 
-    // ⑦ the drag volume and the current reach the field program (types 4 and 5) instead of staying authored only
+    // ⑦ a shared native sampler replaces duplicate local flow sources, samples every 3D lattice cell, and preserves local acceleration.
+    {
+        CoordinateFieldSampler Field;
+        ParticleSpace Shared;
+        Shared.ConstructDefault(Library);
+        Shared.LevelWind.Follow = true;
+        Shared.LevelWind.AnchorMetres = { 12.0, -34.0, 56.0 };
+        ParticleField Attractor = ConstructParticleField(ParticleFieldCategory::Attract);
+        Attractor.Centre = { 0.0, 1.0, 0.0 };
+        Attractor.Radius = 3.0;
+        Attractor.Strength = 2.0;
+        Shared.Fields.push_back(Attractor);
+
+        const ParticleRefreshPlan Plan = Shared.Advance(1.0 / 60.0, 640, 360, nullptr, &Field);
+        const std::array<double, 3> ExpectedOrigin{ 12.0, 56.0, 34.0 };
+        const bool ZeroLocalFlow = std::all_of(Plan.Components.begin(), Plan.Components.end(), [](float Value) { return Value == 0.0f; });
+        Expect(Plan.SharedFieldActive && Same(Plan.SharedFieldOriginMetres, ExpectedOrigin),
+               "the shared ForceField origin converts world Z-up into native field axes");
+        Expect(Plan.Constants[39] == 0.0f && ZeroLocalFlow, "following the shared field suppresses duplicate Particle flow components");
+        Expect(Shared.LevelWind.FlowMps && Same(*Shared.LevelWind.FlowMps, ExpectedOrigin), "the Wind page reads the same native sampler at its anchor");
+
+        const std::vector<float> Samples = SampleParticleWindLattice(Field, Plan.SharedFieldOriginMetres, false);
+        const double CellX = ParticleDomainSize[0] / ParticleDomainDimensions[0];
+        const double CellY = ParticleDomainSize[1] / ParticleDomainDimensions[1];
+        const double CellZ = ParticleDomainSize[2] / ParticleDomainDimensions[2];
+        const std::array<double, 3> ExpectedFirst{ ExpectedOrigin[0] + ParticleDomainMinimum[0] + 0.5 * CellX,
+                                                   ExpectedOrigin[1] + ParticleDomainMinimum[1] + 0.5 * CellY,
+                                                   ExpectedOrigin[2] + ParticleDomainMinimum[2] + 0.5 * CellZ };
+        Expect(Samples.size() == static_cast<size_t>(ParticleDomainDimensions[0] * ParticleDomainDimensions[1] * ParticleDomainDimensions[2] * 4u) &&
+                   std::fabs(Samples[0] - ExpectedFirst[0]) < 1.0e-5 && std::fabs(Samples[1] - ExpectedFirst[1]) < 1.0e-5 &&
+                   std::fabs(Samples[2] - ExpectedFirst[2]) < 1.0e-5,
+               "the native sampler is evaluated at the first texel centre, with x-fastest RGBA packing");
+        bool AccelerationPacked = false;
+        const uint32_t FieldCount = static_cast<uint32_t>(Plan.Fields[0]);
+        for (uint32_t Entry = 0; Entry < FieldCount; ++Entry)
+        {
+            const size_t Offset = (1u + 3u * Entry) * 4u;
+            AccelerationPacked |= Plan.Fields[Offset + 4u] == 0.0f && std::fabs(Plan.Fields[Offset + 5u] - 2.0f) < 1.0e-6f;
+        }
+        Expect(AccelerationPacked, "Particle-specific acceleration fields remain active while shared environmental flow is used");
+
+        ForceFieldSpace Native;
+        PlanetaryWindProfile Profile;
+        Profile.BearingRadians = 0.35;
+        Profile.SpeedMetersPerSecond = 5.0;
+        Profile.GustAmplitude = 0.0;
+        Profile.ShearPerKilometer = 0.0;
+        Profile.VeerRadiansPerKilometer = 0.0;
+        Profile.SwirlStrength = 0.0;
+        Profile.MesoscaleStrength = 0.0;
+        Native.SetWindProfile(Profile);
+        Native.SetElapsedSeconds(0.0);
+        const std::vector<float> NativeSamples = SampleParticleWindLattice(Native, ExpectedOrigin, false);
+        Expect(std::any_of(NativeSamples.begin(), NativeSamples.end(), [](float Value) { return std::fabs(Value) > 0.01f; }),
+               "the native ForceFieldSpace supplies the Particle wind lattice without copied ForceSource records");
+
+        CoordinateFieldSampler DisabledField;
+        DisabledField.Enabled = false;
+        ParticleSpace Fallback;
+        Fallback.ConstructDefault(Library);
+        Fallback.LevelWind.Follow = true;
+        Fallback.LevelWind.FlowMps = std::array<double, 3>{ 9.0, 8.0, 7.0 };
+        ParticleField LocalFlow = ConstructParticleField(ParticleFieldCategory::Prevailing);
+        LocalFlow.Name = "standalone fallback flow";
+        LocalFlow.Strength = 2.0;
+        Fallback.Fields.push_back(LocalFlow);
+        const ParticleRefreshPlan FallbackPlan = Fallback.Advance(1.0 / 60.0, 640, 360, nullptr, &DisabledField);
+        const bool LocalFlowRetained = std::any_of(FallbackPlan.Components.begin(), FallbackPlan.Components.end(),
+                                                    [](float Value) { return Value != 0.0f; });
+        Expect(!FallbackPlan.SharedFieldActive && !Fallback.LevelWind.FlowMps && LocalFlowRetained,
+               "a disabled sampler clears its stale readout and preserves standalone Particle-local flow");
+    }
+
+    // ⑨ the drag volume and the current reach the field program (types 4 and 5) instead of staying authored only
     {
         ParticleSpace Boxes;
         Boxes.ConstructDefault(Library);

@@ -1,20 +1,32 @@
 /*==========================================================================================================================================
                                                             FLUIDSPACE.CPP
 ==========================================================================================================================================*/
-// 🧩 Fluid field allocation, profile initialization, cell coordinates, and source injection.
+// 🧩 Fluid descriptor validation, GPU input queuing, cell coordinates, and source staging.
 
 #include "Engine/PhysicalDynamics/FluidDynamics/FluidSpace.h"
 
+#include <algorithm>
 #include <cmath>
-#include <limits>
 
 namespace Frontier
 {
+namespace
+{
+
+bool Finite(const Vec3d& Value) noexcept
+{
+    return std::isfinite(Value.X) && std::isfinite(Value.Y) && std::isfinite(Value.Z);
+}
+
+} // namespace
 
 bool FluidSpace::Construct(const FluidSpaceDescriptor& Descriptor, std::string* OutDiagnostic)
 {
     const auto& Configuration = Descriptor.Configuration;
     const uint64_t CellCount = static_cast<uint64_t>(Configuration.CellCountX) * Configuration.CellCountY * Configuration.CellCountZ;
+    const double CellSpanX = Configuration.CellSpanMetres * Descriptor.Spatial.Scale.X;
+    const double CellSpanY = Configuration.CellSpanMetres * Descriptor.Spatial.Scale.Y;
+    const double CellSpanZ = Configuration.CellSpanMetres * Descriptor.Spatial.Scale.Z;
     const bool Valid = Configuration.CellCountX >= 2 && Configuration.CellCountX <= 128 &&
                        Configuration.CellCountY >= 2 && Configuration.CellCountY <= 128 &&
                        Configuration.CellCountZ >= 2 && Configuration.CellCountZ <= 128 &&
@@ -28,15 +40,12 @@ bool FluidSpace::Construct(const FluidSpaceDescriptor& Descriptor, std::string* 
                        Configuration.SmokeDiffusivitySquareMetresPerSecond >= 0.0 &&
                        std::isfinite(Configuration.VaporDiffusivitySquareMetresPerSecond) &&
                        Configuration.VaporDiffusivitySquareMetresPerSecond >= 0.0 &&
-                       std::isfinite(Descriptor.Spatial.PositionMetres.X) && std::isfinite(Descriptor.Spatial.PositionMetres.Y) &&
-                       std::isfinite(Descriptor.Spatial.PositionMetres.Z) &&
-                       std::isfinite(Descriptor.Spatial.OrientationDegrees.X) &&
-                       std::isfinite(Descriptor.Spatial.OrientationDegrees.Y) &&
-                       std::isfinite(Descriptor.Spatial.OrientationDegrees.Z) &&
-                       std::isfinite(Descriptor.Thermal.TemperatureKelvin) && Descriptor.Thermal.TemperatureKelvin > 0.0 &&
-                       std::isfinite(Descriptor.Spatial.Scale.X) &&
-                       std::isfinite(Descriptor.Spatial.Scale.Y) && std::isfinite(Descriptor.Spatial.Scale.Z) &&
-                       Descriptor.Spatial.Scale.X > 0.0 && Descriptor.Spatial.Scale.Y > 0.0 && Descriptor.Spatial.Scale.Z > 0.0;
+                       Finite(Descriptor.Spatial.PositionMetres) && Finite(Descriptor.Spatial.OrientationDegrees) &&
+                       Finite(Descriptor.Spatial.Scale) && Descriptor.Spatial.Scale.X > 0.0 &&
+                       Descriptor.Spatial.Scale.Y > 0.0 && Descriptor.Spatial.Scale.Z > 0.0 &&
+                       std::isfinite(CellSpanX) && CellSpanX > 0.0 && std::isfinite(CellSpanY) && CellSpanY > 0.0 &&
+                       std::isfinite(CellSpanZ) && CellSpanZ > 0.0 &&
+                       std::isfinite(Descriptor.Thermal.TemperatureKelvin) && Descriptor.Thermal.TemperatureKelvin > 0.0;
     if (!Valid)
     {
         if (OutDiagnostic != nullptr) *OutDiagnostic = "FluidSpace configuration is outside its finite supported domain";
@@ -45,6 +54,7 @@ bool FluidSpace::Construct(const FluidSpaceDescriptor& Descriptor, std::string* 
 
     Descriptor_ = Descriptor;
     Cells_.assign(static_cast<size_t>(CellCount), FluidCell{});
+    PendingSources_.clear();
     const double InitialTemperatureKelvin = Descriptor.Thermal.Enabled ? Descriptor.Thermal.TemperatureKelvin
                                                                        : Configuration.AmbientTemperatureKelvin;
     for (FluidCell& Cell : Cells_) Cell.TemperatureKelvin = InitialTemperatureKelvin;
@@ -56,6 +66,7 @@ bool FluidSpace::Construct(const FluidSpaceDescriptor& Descriptor, std::string* 
 void FluidSpace::Reset() noexcept
 {
     Cells_.clear();
+    PendingSources_.clear();
     ++Revision_;
 }
 
@@ -85,11 +96,39 @@ const FluidCell& FluidSpace::QueryCell(uint32_t X, uint32_t Y, uint32_t Z) const
 
 void FluidSpace::Inject(uint32_t X, uint32_t Y, uint32_t Z, const FluidSourceContribution& Contribution) noexcept
 {
-    FluidCell& Cell = AccessCell(X, Y, Z);
-    Cell.AirVelocityMetresPerSecond += Contribution.AirVelocityMetresPerSecond;
-    Cell.SmokeDensityKilogramsPerCubicMetre = std::max(0.0, Cell.SmokeDensityKilogramsPerCubicMetre + Contribution.SmokeDensityKilogramsPerCubicMetre);
-    Cell.VaporDensityKilogramsPerCubicMetre = std::max(0.0, Cell.VaporDensityKilogramsPerCubicMetre + Contribution.VaporDensityKilogramsPerCubicMetre);
-    Cell.TemperatureKelvin = std::max(0.01, Cell.TemperatureKelvin + Contribution.TemperatureKelvin);
+    if (Cells_.empty() || X >= QueryCellCountX() || Y >= QueryCellCountY() || Z >= QueryCellCountZ() ||
+        PendingSources_.size() >= FluidSourceLimit || !Finite(Contribution.AirVelocityMetresPerSecond) ||
+        !std::isfinite(Contribution.SmokeDensityKilogramsPerCubicMetre) ||
+        !std::isfinite(Contribution.VaporDensityKilogramsPerCubicMetre) || !std::isfinite(Contribution.TemperatureKelvin))
+        return;
+    const FluidSpaceConfiguration& Configuration = Descriptor_.Configuration;
+    const Vec3d& Scale = Descriptor_.Spatial.Scale;
+    const double Radius = 0.49 * Configuration.CellSpanMetres * std::min({ Scale.X, Scale.Y, Scale.Z });
+    PendingSources_.push_back({ CellWorldPosition(X, Y, Z), std::max(Radius, 1.0e-4), Contribution });
+    ++Revision_;
+}
+
+bool FluidSpace::EnqueueRadialSource(const RadialFluidSource& Source, double DeltaSeconds) noexcept
+{
+    if (PendingSources_.size() >= FluidSourceLimit || !std::isfinite(DeltaSeconds) || DeltaSeconds <= 0.0 || DeltaSeconds > 0.1 ||
+        !std::isfinite(Source.RadiusMetres) || Source.RadiusMetres <= 0.0 || !Finite(Source.Spatial.PositionMetres) ||
+        !Finite(Source.AirVelocityMetresPerSecond) ||
+        !std::isfinite(Source.SmokeDensityRateKilogramsPerCubicMetreSecond) ||
+        !std::isfinite(Source.VaporDensityRateKilogramsPerCubicMetreSecond) ||
+        !std::isfinite(Source.TemperatureRateKelvinPerSecond))
+        return false;
+
+    FluidSourceContribution Delta;
+    Delta.AirVelocityMetresPerSecond = Source.AirVelocityMetresPerSecond * DeltaSeconds;
+    Delta.SmokeDensityKilogramsPerCubicMetre = Source.SmokeDensityRateKilogramsPerCubicMetreSecond * DeltaSeconds;
+    Delta.VaporDensityKilogramsPerCubicMetre = Source.VaporDensityRateKilogramsPerCubicMetreSecond * DeltaSeconds;
+    Delta.TemperatureKelvin = Source.TemperatureRateKelvinPerSecond * DeltaSeconds;
+    if (!Finite(Delta.AirVelocityMetresPerSecond) || !std::isfinite(Delta.SmokeDensityKilogramsPerCubicMetre) ||
+        !std::isfinite(Delta.VaporDensityKilogramsPerCubicMetre) || !std::isfinite(Delta.TemperatureKelvin))
+        return false;
+    PendingSources_.push_back({ Source.Spatial.PositionMetres, Source.RadiusMetres, Delta });
+    ++Revision_;
+    return true;
 }
 
 } // namespace Frontier

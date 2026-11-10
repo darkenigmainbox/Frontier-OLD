@@ -18,3 +18,17 @@ Unified light, spot light, IES goniometric distribution, and environment lightin
   - Lenses: `ACES PBR`, `False-Colour Lux`, `Goniometer`, `Homologation`.
   - Serve locally via `python3 "Experimental Remastered/PhotometricEditor/Serve.py"` (`http://0.0.0.0:8084/Experimental%20Remastered/PhotometricEditor/`).
   - Run validation via `node "Experimental Remastered/PhotometricEditor/PhotometricValidation.mjs"`.
+
+## Multi-view lighting render proofs — 2026-11-09
+
+Four crops show the Photometric Studio's viewport stage in Orbit, Top Plan, Wall Screen, and Roadway camera presets; the fifth capture is the full 1920×1080 workspace window. They use one roadway lighting rig with the ACES PBR lens. Captured through the live Three.js WebGL2 renderer on SwiftShader: 3/8 luminaires active, 5.19 klm, 28.3 lx at screen, no GL errors, lost context, or browser errors.
+
+| Region | Evidence |
+|---|---|
+| Orbit viewport | [`01-OrbitViewport.png`](Images/RenderProofs-2026-11-09/01-OrbitViewport.png) |
+| Top Plan viewport | [`02-TopPlanViewport.png`](Images/RenderProofs-2026-11-09/02-TopPlanViewport.png) |
+| Wall Screen viewport | [`03-WallScreenViewport.png`](Images/RenderProofs-2026-11-09/03-WallScreenViewport.png) |
+| Roadway viewport | [`04-RoadwayViewport.png`](Images/RenderProofs-2026-11-09/04-RoadwayViewport.png) |
+| Full workspace window | [`05-WorkspaceWindow.png`](Images/RenderProofs-2026-11-09/05-WorkspaceWindow.png) |
+
+These images document the separate browser editor and its bundled measured LowBeam profile; they do not exercise the native C++ import dialog. The native Type-C importer and Photometric Workspace integration are validated independently by `PhotometricWorkspaceValidation` and `Exhibits/PhotometricWorkspace/Fixtures/TypeC_Imported.ies`.

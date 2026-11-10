@@ -14,6 +14,7 @@
 #include "Engine/Interface/Controls/GlyphRun.h"
 #include "Engine/Interface/Controls/GlyphSymbol.h"
 #include "Engine/Interface/Controls/Toast.h"
+#include "Frontier/Engine/Interface/Workspaces/PhotometricIesFileDialog.h"
 #include "Engine/Interface/InspectorControls.h"
 
 #include <imgui_internal.h>
@@ -90,14 +91,17 @@ bool QueryMatches(const char* Haystack, const std::string& Needle)
     return false;
 }
 
-void FormatFluxBadge(const PhotometricLight& Light, char* Text, size_t Size) noexcept
+void FormatFluxBadge(const PhotometricWorkspaceState& State, const PhotometricLight& Light, char* Text, size_t Size) noexcept
 {
     if (Light.Type == 0 || Light.Type == 1)
         std::snprintf(Text, Size, "%.0f cd", Light.Props.Intensity);
     else if (Light.Type == 2)
     {
-        const char* Src = Light.Props.UseMeasuredIes ? QueryPhotometricMeasuredIes(Light.Props.MeasuredProfile)
-                                                     : QueryPhotometricPresetIes(Light.Props.PresetProfile);
+        const int Custom = Light.Props.CustomIesProfile;
+        const char* Src = Light.Props.UseMeasuredIes && Custom >= 0 && Custom < static_cast<int>(State.LoadedIesProfiles.size())
+                              ? State.LoadedIesProfiles[Custom].Name.c_str()
+                              : (Light.Props.UseMeasuredIes ? QueryPhotometricMeasuredIes(Light.Props.MeasuredProfile)
+                                                            : QueryPhotometricPresetIes(Light.Props.PresetProfile));
         std::snprintf(Text, Size, "%.0f lm · %s", Light.Props.Lumens * Light.Props.Multiplier, Src);
     }
     else std::snprintf(Text, Size, "%.0f lm", QueryPhotometricFlux(Light.Type, Light.Props));
@@ -164,8 +168,12 @@ void ConstructTopBar(PhotometricWorkspaceState& State, PanelCursor& Root)
         if (InvisibleRect(Actions[I].Id, KeyMin, KeyMax))
         {
             if (I == 0)
-                NoopPhotometricWorkspaceCommand(State, "IES", "Load .ies refused",
-                                                "Loading .ies files is a NOOP in this shell");
+            {
+                State.LoadIesError.clear();
+                const std::string ChosenPath = BrowsePhotometricIesFile();
+                if (!ChosenPath.empty()) (void)LoadPhotometricWorkspaceIes(State, ChosenPath, State.LoadIesError);
+                else if (!PhotometricIesFileDialogAvailable()) State.LoadIesPopupRequested = true;
+            }
             else if (I == 1) State.MatrixOpen = true;
             else if (I == 2)
                 NoopPhotometricWorkspaceCommand(State, "EXPORT", "Export .ies refused",
@@ -319,7 +327,7 @@ void ConstructOutlinerPanel(PhotometricWorkspaceState& State, const EditorTypefa
         Panel.Text(Faces.Medium, 11.5f, RowMin.x + 28.0f, RowMin.y + 6.0f, 1.38f,
                    ResolveCssColour(Light.Visible ? 0xEFEFEFFF : 0x5E5E5EFF), Light.Name.c_str());
         char Badge[96]{};
-        FormatFluxBadge(Light, Badge, sizeof(Badge));
+        FormatFluxBadge(State, Light, Badge, sizeof(Badge));
         Panel.Text(Faces.Regular, 10.0f, RowMin.x + 28.0f, RowMin.y + 24.0f, 1.4f, ResolveCssColour(0x848484FF),
                    Badge);
         ImGui::PushID(400 + I);
@@ -649,7 +657,10 @@ void ConstructLightStage(PhotometricWorkspaceState& State, const EditorTypefaces
     // 📝 Bottom-right telemetry chip, where the reference parks its backend readout.
     {
         const double Klm = QueryPhotometricCensusLumens(State.Lights, 8) / 1000.0;
-        const double Lux = QueryPhotometricWallLux(State.Lights, 8);
+        const double Lux = QueryPhotometricWallLux(State.Lights, 8, State.LoadedIesProfiles.empty()
+                                                                        ? nullptr
+                                                                        : State.LoadedIesProfiles.data(),
+                                                   static_cast<int>(State.LoadedIesProfiles.size()));
         char         Summary[96]{};
         std::snprintf(Summary, sizeof(Summary), "%.1f lx @ screen · %.2f klm", Lux, Klm);
         const float  BackWide = Surface.Measure(Faces.SemiBold, 9.5f, "CPU SHELL", 0.9f);
@@ -805,6 +816,50 @@ void ConstructConsoleDrawer(PhotometricWorkspaceState& State, const EditorTypefa
     ImGui::EndChild();
     ImGui::PopStyleColor();
     ImGui::PopID();
+}
+
+//------------------------------------------------------------------------------------------------------------------------
+//                                                    NATIVE IES IMPORT
+//------------------------------------------------------------------------------------------------------------------------
+
+void ConstructLoadIesPopup(PhotometricWorkspaceState& State)
+{
+    static constexpr const char* PopupId = "Import LM-63 Type-C IES";
+    if (State.LoadIesPopupRequested)
+    {
+        ImGui::OpenPopup(PopupId);
+        State.LoadIesPopupRequested = false;
+    }
+    const ImGuiViewport* Viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(Viewport->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(560.0f, 245.0f), ImGuiCond_Appearing);
+    if (!ImGui::BeginPopupModal(PopupId, nullptr, ImGuiWindowFlags_NoSavedSettings)) return;
+
+    ImGui::TextWrapped("Import a Type-C LM-63 profile. TILT=NONE is required; the selected file is limited to 4 MiB.");
+    ImGui::Spacing();
+    ImGui::SetNextItemWidth(-1.0f);
+    ImGui::InputText("IES file path", State.LoadIesPath, sizeof(State.LoadIesPath));
+    if (!State.LoadIesError.empty())
+    {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.48f, 0.36f, 1.0f));
+        ImGui::TextWrapped("%s", State.LoadIesError.c_str());
+        ImGui::PopStyleColor();
+    }
+    const float ButtonWidth = 142.0f;
+    ImGui::SetCursorPosX(ImGui::GetWindowWidth() - ButtonWidth * 2.0f - ImGui::GetStyle().ItemSpacing.x - 16.0f);
+    if (ImGui::Button("Import profile", ImVec2(ButtonWidth, 32.0f)))
+    {
+        if (LoadPhotometricWorkspaceIes(State, State.LoadIesPath, State.LoadIesError)) ImGui::CloseCurrentPopup();
+    }
+    RecordRect(State, "LoadIes/Import", ImGui::GetItemRectMin(), ImGui::GetItemRectMax());
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel", ImVec2(ButtonWidth, 32.0f)))
+    {
+        State.LoadIesError.clear();
+        ImGui::CloseCurrentPopup();
+    }
+    RecordRect(State, "LoadIes/Cancel", ImGui::GetItemRectMin(), ImGui::GetItemRectMax());
+    ImGui::EndPopup();
 }
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -966,11 +1021,13 @@ void ApplyPhotometricWorkspaceLink(PhotometricWorkspaceState& State, AssetBrowse
                 {
                     State.Lights[Target].Props.UseMeasuredIes  = true;
                     State.Lights[Target].Props.MeasuredProfile = Found;
+                    State.Lights[Target].Props.CustomIesProfile = -1;
                 }
                 else
                 {
                     State.Lights[Target].Props.UseMeasuredIes = false;
                     State.Lights[Target].Props.PresetProfile  = Found;
+                    State.Lights[Target].Props.CustomIesProfile = -1;
                 }
                 SelectPhotometricWorkspaceNode(State, Target);
                 char Message[192]{};
@@ -1066,6 +1123,7 @@ void ConstructPhotometricWorkspace(PhotometricWorkspaceState& State, const Edito
     ImGui::PopStyleColor();
 
     ConstructIesMatrix(State, Faces, ImVec2(0.0f, 0.0f), Size, Link);
+    ConstructLoadIesPopup(State);
     Toast::Construct();
     ImGui::End();
 }

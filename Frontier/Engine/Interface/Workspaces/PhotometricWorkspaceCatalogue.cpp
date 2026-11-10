@@ -8,7 +8,9 @@
 
 #include "Frontier/Engine/Interface/Workspaces/PhotometricWorkspace.h"
 #include "Frontier/Engine/Interface/Controls/Toast.h"
+#include "Frontier/Engine/Interface/Workspaces/PhotometricIesFileDialog.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -263,38 +265,89 @@ double QueryPhotometricCensusLumens(const PhotometricLight* Lights, int Count) n
     return Total;
 }
 
-double QueryPhotometricWallLux(const PhotometricLight* Lights, int Count) noexcept
+double QueryPhotometricWallLux(const PhotometricLight* Lights, int Count, const PhotometricIesProfile* ImportedProfiles,
+                              int ImportedProfileCount) noexcept
 {
-    // 🧩 Faithful mirror of PhotometricViewport.SampleStagePointLux at the reference probe (0, 1.4, -5.25):
-    //    R2 clamps to 0.25, spots carry a x1.4 throw factor, point/area/tube fall back through
-    //    intensity -> lumens -> 500, and IES lights scale by the measured-curve screen gain plus a
-    //    0.05 spill floor. The gains stand in for the LM-63 tables the shell does not load: the
-    //    asymmetric beams (LowBeam/HighBeam/Roadway) run cool at the screen probe, the floods hot.
+    // 🧩 Reference probe: (0, 1.4, -5.25). Bundled profile names retain their authored screen-gain estimates;
+    // imported Type-C files instead sample the measured candela atlas in the emitter's local photometric frame.
     if (Lights == nullptr) return 0.0;
     static const double MeasuredGain[7] = { 0.30, 0.42, 0.65, 0.38, 0.85, 1.00, 1.45 };
     static const double PresetGain[8]   = { 1.10, 0.55, 0.75, 0.30, 0.95, 1.25, 0.60, 0.90 };
+    constexpr double Pi = 3.14159265358979323846;
     double Lux = 0.0;
     for (int I = 0; I < Count; ++I)
     {
         if (!Lights[I].Visible) continue;
-        const double Dx = 0.0 - Lights[I].Props.Position[0];
-        const double Dy = 1.4 - Lights[I].Props.Position[1];
-        const double Dz = -5.25 - Lights[I].Props.Position[2];
-        double         R2 = Dx * Dx + Dy * Dy + Dz * Dz;
+        const PhotometricLightProps& Props = Lights[I].Props;
+        const double Dx = 0.0 - Props.Position[0];
+        const double Dy = 1.4 - Props.Position[1];
+        const double Dz = -5.25 - Props.Position[2];
+        double R2 = Dx * Dx + Dy * Dy + Dz * Dz;
         if (R2 < 0.25) R2 = 0.25;
         double Intensity = 0.0;
         if (Lights[I].Type == 2)
         {
-            const int Profile = Lights[I].Props.UseMeasuredIes ? Lights[I].Props.MeasuredProfile
-                                                               : Lights[I].Props.PresetProfile;
-            const double Gain = Lights[I].Props.UseMeasuredIes
-                                    ? MeasuredGain[Profile < 0 || Profile >= 7 ? 0 : Profile]
-                                    : PresetGain[Profile < 0 || Profile >= 8 ? 0 : Profile];
-            Intensity = Lights[I].Props.Lumens * Lights[I].Props.Multiplier * 0.25 * (Gain + 0.05);
+            const int ImportedIndex = Props.UseMeasuredIes ? Props.CustomIesProfile : -1;
+            if (ImportedProfiles != nullptr && ImportedIndex >= 0 && ImportedIndex < ImportedProfileCount)
+            {
+                const PhotometricIesProfile& Profile = ImportedProfiles[ImportedIndex];
+                double Forward[3] = { 0.0, 0.0, -1.0 };
+                if (Props.HasTarget)
+                {
+                    Forward[0] = Props.Target[0] - Props.Position[0];
+                    Forward[1] = Props.Target[1] - Props.Position[1];
+                    Forward[2] = Props.Target[2] - Props.Position[2];
+                }
+                const auto Normalize = [](double V[3])
+                {
+                    const double Length = std::sqrt(V[0] * V[0] + V[1] * V[1] + V[2] * V[2]);
+                    if (!(Length > 1.0e-12)) return false;
+                    V[0] /= Length; V[1] /= Length; V[2] /= Length;
+                    return true;
+                };
+                if (!Normalize(Forward)) { Forward[0] = 0.0; Forward[1] = 0.0; Forward[2] = -1.0; }
+                double Direction[3] = { Dx, Dy, Dz };
+                if (!Normalize(Direction))
+                {
+                    Direction[0] = Forward[0];
+                    Direction[1] = Forward[1];
+                    Direction[2] = Forward[2];
+                }
+                // World-up is +Y, so forward × world-up is (-Fz, 0, Fx); this is orthogonal to the beam.
+                double Right[3] = { -Forward[2], 0.0, Forward[0] };
+                if (!Normalize(Right)) { Right[0] = 1.0; Right[1] = 0.0; Right[2] = 0.0; }
+                double LocalUp[3] = { Right[1] * Forward[2] - Right[2] * Forward[1],
+                                      Right[2] * Forward[0] - Right[0] * Forward[2],
+                                      Right[0] * Forward[1] - Right[1] * Forward[0] };
+                if (!Normalize(LocalUp)) { LocalUp[0] = 0.0; LocalUp[1] = 1.0; LocalUp[2] = 0.0; }
+                const double CosPolar = std::clamp(Direction[0] * Forward[0] + Direction[1] * Forward[1] +
+                                                   Direction[2] * Forward[2], -1.0, 1.0);
+                const double PolarDeg = std::acos(CosPolar) * 180.0 / Pi;
+                const double AzimuthDeg = std::atan2(Direction[0] * Right[0] + Direction[1] * Right[1] +
+                                                     Direction[2] * Right[2],
+                                                     Direction[0] * LocalUp[0] + Direction[1] * LocalUp[1] +
+                                                     Direction[2] * LocalUp[2]) * 180.0 / Pi;
+                double FluxScale = 1.0;
+                if (Profile.LumensPerLamp > 0.0 && Profile.NumberOfLamps > 0)
+                {
+                    const double RatedLumens = Profile.LumensPerLamp * Profile.NumberOfLamps;
+                    if (RatedLumens > 1.0e-9) FluxScale = Props.Lumens / RatedLumens;
+                }
+                Intensity = Profile.PeakCandela * SamplePhotometricIes(Profile, AzimuthDeg, PolarDeg) *
+                            FluxScale * Props.Multiplier;
+            }
+            else
+            {
+                const int Profile = Props.UseMeasuredIes ? Props.MeasuredProfile : Props.PresetProfile;
+                const double Gain = Props.UseMeasuredIes
+                                        ? MeasuredGain[Profile < 0 || Profile >= 7 ? 0 : Profile]
+                                        : PresetGain[Profile < 0 || Profile >= 8 ? 0 : Profile];
+                Intensity = Props.Lumens * Props.Multiplier * 0.25 * (Gain + 0.05);
+            }
         }
-        else if (Lights[I].Type == 1) Intensity = Lights[I].Props.Intensity * 1.4;
-        else if (Lights[I].Type == 0) Intensity = Lights[I].Props.Intensity * 0.1;
-        else if (Lights[I].Type == 3 || Lights[I].Type == 4) Intensity = Lights[I].Props.Lumens * 0.1;
+        else if (Lights[I].Type == 1) Intensity = Props.Intensity * 1.4;
+        else if (Lights[I].Type == 0) Intensity = Props.Intensity * 0.1;
+        else if (Lights[I].Type == 3 || Lights[I].Type == 4) Intensity = Props.Lumens * 0.1;
         else Intensity = 500.0 * 0.1;
         Lux += Intensity / R2;
     }
@@ -386,12 +439,64 @@ void ConstructPhotometricWorkspaceState(PhotometricWorkspaceState& State)
     State.MatrixOpen   = false;
     State.AddDrawerOpen = false;
     State.SearchQuery.clear();
+    State.LoadedIesProfiles.clear();
+    State.LoadIesPopupRequested = false;
+    State.LoadIesPath[0] = '\0';
+    State.LoadIesError.clear();
     State.NoopCount           = 0;
     State.ExportIesNoopRaised = false;
     State.ExportRigNoopRaised = false;
     EvaluatePhotometricSun(State.Sun, State.SunSolved);
     State.Log.clear();
     AppendPhotometricWorkspaceLog(State, "RIG", "Photometric studio ready · 8 luminaires · 7 environment lights");
+}
+
+bool LoadPhotometricWorkspaceIes(PhotometricWorkspaceState& State, const std::string& Utf8Path, std::string& Error)
+{
+    Error.clear();
+    if (Utf8Path.empty())
+    {
+        Error = "Choose an .ies file to import.";
+        return false;
+    }
+    int Target = State.Selected >= 0 && State.Selected < 8 && State.Lights[State.Selected].Type == 2
+                    ? State.Selected
+                    : -1;
+    if (Target < 0)
+        for (int Index = 0; Index < 8; ++Index)
+            if (State.Lights[Index].Type == 2) { Target = Index; break; }
+    if (Target < 0)
+    {
+        Error = "This workspace has no IES luminaire to receive the imported profile.";
+        State.LoadIesError = Error;
+        Toast::Show(Error.c_str());
+        return false;
+    }
+
+    PhotometricIesProfile Imported;
+    const std::filesystem::path Path = std::filesystem::u8path(Utf8Path);
+    if (!LoadPhotometricIesFile(Path, Imported, Error))
+    {
+        State.LoadIesError = Error;
+        Toast::Show(Error.c_str());
+        char Message[256]{};
+        std::snprintf(Message, sizeof(Message), "Import rejected · %s", Error.c_str());
+        AppendPhotometricWorkspaceLog(State, "IES", Message);
+        return false;
+    }
+
+    State.LoadedIesProfiles.push_back(std::move(Imported));
+    PhotometricLightProps& Props = State.Lights[Target].Props;
+    Props.UseMeasuredIes = true;
+    Props.CustomIesProfile = static_cast<int>(State.LoadedIesProfiles.size()) - 1;
+    State.LoadIesError.clear();
+    char Message[192]{};
+    std::snprintf(Message, sizeof(Message), "Imported Type-C LM-63 profile · %s → %s",
+                  State.LoadedIesProfiles.back().Name.c_str(), State.Lights[Target].Name.c_str());
+    AppendPhotometricWorkspaceLog(State, "IES", Message);
+    SelectPhotometricWorkspaceNode(State, Target);
+    Toast::Show("LM-63 Type-C profile imported");
+    return true;
 }
 
 void AppendPhotometricWorkspaceLog(PhotometricWorkspaceState& State, const char* Channel, const char* Message)

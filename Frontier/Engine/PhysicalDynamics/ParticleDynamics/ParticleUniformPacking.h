@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "Engine/PhysicalDynamics/IFieldSampler.h"
 #include "Frontier/Engine/PhysicalDynamics/ParticleDynamics/ParticleEffectLibrary.h"
 
 #include <array>
@@ -39,6 +40,12 @@ using ParticleRefreshConstants  = std::array<float, 52>;    // eos glob
 using ParticleWindComponents    = std::array<float, ParticleWindComponentLimit * 8>;
 using ParticleAccelerationBlock = std::array<float, 128>;
 using ParticleLensingBlock      = std::array<float, 32>;
+
+// 📝 Samples the native shared ForceField at particle-lattice texel centres. The origin is in ForceField axes and the
+//    returned interleaved RGBA floats are (flow xyz, magnitude), x-fastest, matching the GPU wind texture layout.
+[[nodiscard]] std::vector<float> SampleParticleWindLattice(const IFieldSampler& Field,
+                                                           const std::array<double, 3>& FieldOriginMetres,
+                                                           bool IncludeCurlSwirl = true);
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                    EFFECT UNIFORM

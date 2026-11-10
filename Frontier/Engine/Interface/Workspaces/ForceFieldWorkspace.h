@@ -1,12 +1,8 @@
 /*==========================================================================================================================================
                                                            FORCEFIELDWORKSPACE.H
 ==========================================================================================================================================*/
-// 🧩 Force Field & Wind Workspace as a C++ UI shell: the Remastered 1:1 visuals (top bar, outliner, Map 2D + 3D Stage,
-//    inspector, timeline, log, library) over local view state only. Value controls (sliders, switches, segments,
-//    vectors, chips, dials, tiles, tabs) hold shell-local figures; every command that would mutate the scene or reach
-//    the engines (scenario tabs, place, frame, duplicate, remove, fire, copy, reset) is an explicit NOOP: it raises a
-//    toast, appends a log line, and changes nothing. The workspace makes no engine, shader, or renderer calls; the map
-//    streamlines, arrows, envelopes, metrics, and series are static decor, honestly labelled in the viewport footer.
+// 🧩 Native Force Field & Wind workspace: editable authored sources, four switchable presets, a live field sampler and
+//    navigation, timeline triggers, and a TOML .levelspace export backed by Frontier's native ForceFieldSpace evaluator.
 
 #pragma once
 
@@ -17,6 +13,7 @@
 #include <cstdint>
 #include <deque>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -24,6 +21,7 @@ namespace Frontier
 {
 
 struct EditorTypefaces;
+struct ForceFieldWorkspaceRuntime;
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                    CATALOGUE
@@ -121,7 +119,7 @@ struct ForceFieldWorkspaceSource
     int         Type      = 0;
     std::string Name;
     bool        Enabled   = true;
-    double      Centre[3] = { 0.0, 0.0, 0.0 };
+    double      Centre[3] = { 0.0, 0.0, 0.0 }; // 🧩 Workspace axes: east, altitude, north; native field Z is -north.
     int         Reach     = ForceFieldReachSphere;
     double      Radius    = 180.0;
     double      Height    = 180.0;
@@ -169,11 +167,16 @@ struct ForceFieldWorkspaceState
         double RegionRadius = 1600.0;
         double Bearing      = 45.0;
         double Speed        = 4.5;
+        double GustAmplitude = 3.4;
         double GustStrength = 0.25;
         double GustFrequency = 0.085;
         double Turbulence   = 0.38;
+        double TurbulenceScale = 91.0;
         double Shear        = 0.15;
         double Veer         = 8.0;
+        double MesoscaleStrength = 0.22;
+        double MesoscaleScale = 18000.0;
+        uint32_t Seed = 7331;
     } Wind;
 
     struct ViewState
@@ -193,14 +196,19 @@ struct ForceFieldWorkspaceState
         bool   Heatmap       = false;
         bool   MinimalLabels = false;
         double Span          = 1400.0;
+        double CentreX       = 0.0;
+        double CentreZ       = 0.0; // 🧩 Native field-axis Z (south-positive), unlike source workspace north.
+        double Yaw           = 0.7853981633974483;
+        double Pitch         = 0.62;
         int    Solo          = -1; // 🧩 Source index or -1.
         int    Follow        = -1;
     } View;
 
     std::vector<ForceFieldWorkspaceSource> Sources;
-    int    Scenario      = 0; // 🧩 0 lab (scenario tabs are NOOPs; the lab scene always shows).
-    int    ViewMode      = 0; // 🧩 0 Map 2D, 1 3D Stage.
-    int    PlacementType = -1; // 🧩 Armed placement type index or -1; arming is chrome, placing is a NOOP.
+    std::shared_ptr<ForceFieldWorkspaceRuntime> Runtime;
+    int    Scenario      = 0; // 🧩 0 lab, 1 corridor, 2 storm, 3 genuinely empty build preset.
+    int    ViewMode      = 0; // 🧩 0 Map 2D, 1 Oblique 3D slice.
+    int    PlacementType = -1; // 🧩 Armed source type index or -1.
     bool   LibraryOpen   = false;
     bool   LogOpen       = false;
     double ClockTime     = 0.0;
@@ -208,6 +216,9 @@ struct ForceFieldWorkspaceState
     int    ClockRate     = 1; // 🧩 1 / 10.
     double TimelineDuration = 60.0;
     std::string OutlinerQuery;
+    std::string ExportPath = "ForceFieldWorkspace.levelspace";
+    std::string ExportStatus = "Export the native ForceField, Wind, and ForceSource records.";
+    std::string ExportPreview;
 
     bool CardDeclutter = true;
     bool CardReceivers = true;
@@ -228,10 +239,13 @@ struct ForceFieldWorkspaceState
 };
 
 void        ConstructForceFieldWorkspaceState(ForceFieldWorkspaceState& State);
+void        ApplyForceFieldWorkspacePreset(ForceFieldWorkspaceState& State, int Scenario);
+[[nodiscard]] int AddForceFieldWorkspaceSource(ForceFieldWorkspaceState& State, int Type, double X, double Y, double Z);
+[[nodiscard]] bool DuplicateForceFieldWorkspaceSource(ForceFieldWorkspaceState& State, int Index);
+[[nodiscard]] bool RemoveForceFieldWorkspaceSource(ForceFieldWorkspaceState& State, int Index);
+[[nodiscard]] bool FireForceFieldWorkspaceSource(ForceFieldWorkspaceState& State, int Index);
 void        AppendForceFieldWorkspaceLog(ForceFieldWorkspaceState& State, const char* Channel, const char* Message, const char* Detail = nullptr,
                                       const char* Key = nullptr);
-void        NoopForceFieldWorkspaceAction(ForceFieldWorkspaceState& State, const char* Channel, const char* Message);
-void        NoopForceFieldWorkspaceCommand(ForceFieldWorkspaceState& State, const char* Channel, const char* Message, const char* ToastText);
 void        LogForceFieldWorkspaceValue(ForceFieldWorkspaceState& State, const char* Channel, const char* Owner, const char* Label,
                                      const char* Shown);
 void        RecordForceFieldWorkspaceRect(ForceFieldWorkspaceState& State, const char* Name, ImVec2 Min, ImVec2 Max);

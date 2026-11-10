@@ -9,14 +9,14 @@
 
 | Area | Claimed before | Verified now |
 |---|---|---|
-| 3.5 FluidSpace headless | "mistake, no UI" | Partial CPU foundation is real and validated; the browser editor at `Experimental/Fluid/` is the UI reference. No replacement editor needed. Remaining: GPU path, boundary/thermal depth, replication of release state, native/browser bridge. All deferred. |
+| 3.5 FluidSpace headless | "mistake, no UI" | Native Slang/Vulkan GPU solver and `.fluidspace` data layer are implemented; pinned SwiftShader GPU validation passes. The browser app at `Experimental/Fluid/` remains the separate UI reference; neither it nor the native Fluid shell is wired to the C++ sequence. Remaining: boundary/thermal depth, replication of release state, native/browser bridge and native workspace wiring. |
 | 3.6 GizmoSpace rename | "Open, not renamed" | **Done:** `SceneSubjectPlacement`, `SubjectDistanceSpace`, `SubjectRelocation`, `SpatialEditable` + `PlacementGizmo` adapters. Still open: ~19 `Occupant*` files in GI/Rendering, `Frame` identifiers, live gizmo wiring, facetspace resolution, collision export. Deferred except gizmo wiring. |
 | Phase 4 CurveSpace | "0%, does not exist" | **Data layer done:** `Frontier/Engine/Foundation/Curves/CurveSpace.h` (linear/Hermite/PCHIP + LUT + `.curvespace` codec, 26 checks). Missing: domain consumers. Deferred. |
 | Phase 4 EffectSpace | "0%, does not exist" | **Data layer done:** `Frontier/Engine/Rendering/VisualEffects/EffectSpace.h` (4 effect kinds + spatial/replication + `.effectspace` codec, 19 checks). Missing: GPU evaluation pipeline. Deferred. |
 | Shared UI slice | — | **Started:** `Interface/Controls/CurvePlot` + CPU evidence. This is the seed of the Studio Kit. |
 | ForceField sharing | "needs fixes/refactor" | **Confirmed.** `IFieldSampler` contract is sampled by Particle/Fluid/Physics/Clouds and works, but: `ForceField.cpp` is 1250 lines (violates the <450-line TU rule), evaluators are not split into Flow/Acceleration/Damping units, Wind is embedded (not master/guest separated), `ForceReach::Everywhere` still exists (Remastered demands strictly finite envelopes), and the Remastered 17th placeable (`WindGenerator`) has no C++ counterpart. **This is the one foundation refactor we do now.** |
 | Fracture engine | — | Not started: only stub `FractureEditor` (54 lines) + `FractureInspector`. Engine comes after UI. |
-| Plume/Fluid engine | — | CPU foundation exists (see 3.5 row). Completion comes after UI. |
+| Plume/Fluid engine | — | GPU compute foundation exists (see 3.5 row); full thermal/boundary/replication behavior and UI/bridge integration remain open. |
 | Old C++ UI | — | Pre-Remastered pages exist (ForceField/Wind sections, Particle modal, decorative Fluid/Fracture stubs). They do **not** match Remastered visuals and are replaced by the shells below, not patched. |
 
 Vehicle Lab / AssetInspector stay **out of scope** (per `RemasteredWorkspaceParity.md`).
@@ -56,8 +56,8 @@ Rules for NOOP shells:
   19-file `Occupant*` rename, `Frame` purge, facetspace resolution, collision
   export.
 - [ ] **F3. Baseline:** full `ctest` green before UI work starts. Defer everything
-  else (CurveSpace consumers, EffectSpace GPU, Fluid GPU/bridge, Fracture
-  engine, Session, Vehicle).
+  else (CurveSpace consumers, EffectSpace GPU, Fluid browser/native bridge and
+  remaining boundary/thermal/replication work, Fracture engine, Session, Vehicle).
 
 ## 3. Phase U — Remastered UI shells in C++ (1:1 visuals, NOOP logic)
 

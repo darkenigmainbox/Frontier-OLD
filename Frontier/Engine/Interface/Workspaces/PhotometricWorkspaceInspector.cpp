@@ -25,6 +25,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <vector>
 
 namespace Frontier
 {
@@ -260,8 +261,11 @@ void ConstructLightPreview(PhotometricWorkspaceState& State, ControlColumn& Colu
         else if (Type == 2)
         {
             std::snprintf(Caption, sizeof(Caption), "Profile source flux");
-            if (P.UseMeasuredIes)
-                std::snprintf(Descriptor, sizeof(Descriptor), "%s.ies / measured LM-63 Type-C",
+            if (P.UseMeasuredIes && P.CustomIesProfile >= 0 && P.CustomIesProfile < static_cast<int>(State.LoadedIesProfiles.size()))
+                std::snprintf(Descriptor, sizeof(Descriptor), "%s.ies / imported LM-63 Type-C",
+                              State.LoadedIesProfiles[P.CustomIesProfile].Name.c_str());
+            else if (P.UseMeasuredIes)
+                std::snprintf(Descriptor, sizeof(Descriptor), "%s.ies / bundled LM-63 Type-C",
                               QueryPhotometricMeasuredIes(P.MeasuredProfile));
             else
                 std::snprintf(Descriptor, sizeof(Descriptor), "%s / synthetic polar study",
@@ -461,17 +465,65 @@ void ConstructLightOptics(PhotometricWorkspaceState& State, ControlColumn& Colum
             if (SelectPill::Construct(Column, "OptPreset", "Analytical preset", Presets, 8, P.PresetProfile))
             {
                 P.UseMeasuredIes = false;
+                P.CustomIesProfile = -1;
                 LogPhotometricWorkspaceValue(State, "PARAM", "Analytical preset", Presets[P.PresetProfile]);
             }
-            static const char* Measured[8] = { "(Analytical preset active)", "LowBeam.ies (LM-63)",
-                                               "HighBeam.ies (LM-63)", "FogBeam.ies (LM-63)", "Roadway.ies (LM-63)",
-                                               "Area.ies (LM-63)", "RoofFlood.ies (LM-63)", "RoofSpot.ies (LM-63)" };
-            int Sel = P.UseMeasuredIes ? P.MeasuredProfile + 1 : 0;
-            if (SelectPill::Construct(Column, "OptMeasured", "LM-63 .ies file", Measured, 8, Sel))
+
+            static const char* BuiltInMeasured[8] = { "(Analytical preset active)", "LowBeam.ies (LM-63)",
+                                                       "HighBeam.ies (LM-63)", "FogBeam.ies (LM-63)",
+                                                       "Roadway.ies (LM-63)", "Area.ies (LM-63)",
+                                                       "RoofFlood.ies (LM-63)", "RoofSpot.ies (LM-63)" };
+            std::vector<std::string> ImportedLabels;
+            ImportedLabels.reserve(State.LoadedIesProfiles.size());
+            std::vector<const char*> MeasuredOptions;
+            MeasuredOptions.reserve(8 + State.LoadedIesProfiles.size());
+            for (const char* Label : BuiltInMeasured) MeasuredOptions.push_back(Label);
+            for (const PhotometricIesProfile& Profile : State.LoadedIesProfiles)
+            {
+                ImportedLabels.push_back(Profile.Name + " (imported Type-C)");
+                MeasuredOptions.push_back(ImportedLabels.back().c_str());
+            }
+            int Sel = 0;
+            if (P.UseMeasuredIes)
+            {
+                if (P.CustomIesProfile >= 0 && P.CustomIesProfile < static_cast<int>(State.LoadedIesProfiles.size()))
+                    Sel = 8 + P.CustomIesProfile;
+                else Sel = P.MeasuredProfile + 1;
+            }
+            if (SelectPill::Construct(Column, "OptMeasured", "LM-63 .ies file", MeasuredOptions.data(),
+                                      static_cast<int>(MeasuredOptions.size()), Sel))
             {
                 P.UseMeasuredIes = Sel > 0;
-                if (Sel > 0) P.MeasuredProfile = Sel - 1;
-                LogPhotometricWorkspaceValue(State, "PARAM", "LM-63 file", Measured[Sel]);
+                P.CustomIesProfile = Sel >= 8 ? Sel - 8 : -1;
+                if (Sel > 0 && Sel < 8) P.MeasuredProfile = Sel - 1;
+                LogPhotometricWorkspaceValue(State, "PARAM", "LM-63 file", MeasuredOptions[Sel]);
+            }
+            if (P.UseMeasuredIes && P.CustomIesProfile >= 0 && P.CustomIesProfile < static_cast<int>(State.LoadedIesProfiles.size()))
+            {
+                const PhotometricIesProfile& Profile = State.LoadedIesProfiles[P.CustomIesProfile];
+                ConstructCaption(Column, "Imported Type-C profile · C0/C90 candela curves normalized to peak");
+                DiagramPen Plot = DiagramCanvas::Begin(Column, "ImportedIesCurves", 300.0f, 92.0f, 4.0f, 4.0f);
+                for (int Guide = 0; Guide <= 4; ++Guide)
+                {
+                    const float Y = 72.0f - Guide * 15.0f;
+                    Plot.Line(ImVec2(28.0f, Y), ImVec2(286.0f, Y), IM_COL32(255, 255, 255, 18));
+                }
+                Plot.Line(ImVec2(28.0f, 12.0f), ImVec2(28.0f, 72.0f), IM_COL32(255, 255, 255, 44));
+                Plot.Line(ImVec2(28.0f, 72.0f), ImVec2(286.0f, 72.0f), IM_COL32(255, 255, 255, 44));
+                std::vector<ImVec2> C0, C90;
+                C0.reserve(33); C90.reserve(33);
+                for (int Point = 0; Point <= 32; ++Point)
+                {
+                    const double Polar = 180.0 * Point / 32.0;
+                    const float X = 28.0f + 258.0f * Point / 32.0f;
+                    C0.emplace_back(X, 72.0f - 60.0f * SamplePhotometricIes(Profile, 0.0, Polar));
+                    C90.emplace_back(X, 72.0f - 60.0f * SamplePhotometricIes(Profile, 90.0, Polar));
+                }
+                Plot.Path(C0, IM_COL32(232, 194, 122, 255), 2.0f);
+                Plot.Path(C90, IM_COL32(126, 194, 232, 255), 2.0f);
+                Plot.Text(ImVec2(34.0f, 11.0f), "C0", IM_COL32(232, 194, 122, 255), 8.0f, -1);
+                Plot.Text(ImVec2(68.0f, 11.0f), "C90", IM_COL32(126, 194, 232, 255), 8.0f, -1);
+                Plot.Text(ImVec2(286.0f, 88.0f), "180° polar", IM_COL32(132, 132, 132, 255), 8.0f, 1);
             }
             ConstructParamSlider(State, Column, "PARAM", "OptMult", "Profile multiplier", P.Multiplier, 0.0, 4.0,
                                  0.05, "×", 2);
