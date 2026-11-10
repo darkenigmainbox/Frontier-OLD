@@ -355,6 +355,8 @@ EverestWorkspace::EverestWorkspace(Frontier::ControlCentrePanel& ControlCentre,
     , ProjectRoot(std::move(ProjectRootPath))
 {
     InitializeWorld();
+    Frontier::ConstructFractureWorkspaceState(FractureStudioState);
+    FractureStudioRuntime = std::make_unique<Frontier::FractureStudioRuntime>();
 
     // 📝 The scene's entries plus the one Render settings component (the whole renderer, owner's request) and the scene archive's
     //    geometry objects; neither the renderer nor the geometry is constructible (the archive decides what geometry exists).
@@ -407,6 +409,11 @@ EverestWorkspace::EverestWorkspace(Frontier::ControlCentrePanel& ControlCentre,
                  SaveActiveLevel();
              }
          }},
+        {"Fracture Studio", Frontier::ControlCentreIconCategory::LayersSlabs,
+         [this, Token]() {
+             if (!Token.expired()) FractureStudioOpen = !FractureStudioOpen;
+         },
+         [this, Token]() { return !Token.expired() && FractureStudioOpen; }},
     });
 
     auto OutlinerSpec=Frontier::MakeSceneDirectoryPanelSpecification(OutlinerPanel);
@@ -1028,7 +1035,28 @@ void EverestWorkspace::ConstructInterface(double DeltaSeconds)
         Navigation.Mode = SceneCameraMode::Free;
         Navigation.Up = {0, 0, 1};
     }
-    if (Overlays.Fullscreen) ConstructFullscreenViewport(Scale);
+    if (FractureStudioOpen)
+    {
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape, false) && ImGui::GetTopMostPopupModal() == nullptr)
+        {
+            FractureStudioOpen = false;
+            FractureStudioState.TimelinePlaying = false;
+        }
+        if (FractureStudioOpen)
+        {
+            Frontier::ConstructFractureWorkspace(FractureStudioState, Frontier::EditorTypefaces::Resolve(), IO.DisplaySize,
+                                                  nullptr, FractureStudioRuntime.get(), DeltaSeconds);
+            if (FractureStudioState.LeaveRequested)
+            {
+                FractureStudioState.LeaveRequested = false;
+                FractureStudioOpen = false;
+                FractureStudioState.TimelinePlaying = false;
+                Dockspace.ConstructInterface(Scale);
+            }
+        }
+        else Dockspace.ConstructInterface(Scale);
+    }
+    else if (Overlays.Fullscreen) ConstructFullscreenViewport(Scale);
     else Dockspace.ConstructInterface(Scale);
     Frontier::InspectorRuntime::Instance().ConstructActiveEditor();
     if (const auto Order = ConstructDialog.Construct(Scale)) ServiceConstructOrder(*Order);

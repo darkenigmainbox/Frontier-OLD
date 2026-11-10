@@ -1,11 +1,10 @@
 /*==========================================================================================================================================
                                                            FRACTUREWORKSPACE.CPP
 ==========================================================================================================================================*/
-// 🧩 The Fracture Workspace root shell: top bar (brand, construct tabs, suite keys), scene outliner, solid & solver
-//    preset library, viewport bar + shard stage + transport + fracture timeline, inspector host, solver matrix dialog,
-//    log drawer, and the status bar. Value edits touch shell-local state only; every engine-bound command is an
-//    explicit NOOP with a toast and a warm log line. The matrix sheet lives in its own child window so its keys
-//    receive presses over the inspector child; the veil dismisses on outside presses.
+// The Fracture Studio root workspace: catalogue, solver-backed shard stage, transport, inspector, and Jolt runtime
+// integration. Recipe edits are deterministic and logged; native fracture commands update measured results and, when
+// supplied, an isolated rigid-body world. The matrix sheet remains a child window so its keys receive presses over
+// the inspector child; the veil dismisses on outside presses.
 
 #include "Engine/Interface/Workspaces/FractureWorkspace.h"
 
@@ -18,9 +17,11 @@
 
 #include <imgui_internal.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <vector>
 
 namespace Frontier
 {
@@ -231,6 +232,197 @@ bool QueryNodeShown(const FractureWorkspaceState& State, int Node)
     return QueryMatches(QueryNodeName(State, Node), State.OutlinerQuery);
 }
 
+
+Fracture::SolidKind ResolveWorkspaceSolid(const FractureWorkspaceConstruct& Construct) noexcept
+{
+    if (Construct.SolidCategory == "curtain_pane") return Fracture::SolidKind::CurtainPane;
+    if (Construct.SolidCategory == "timber_beam") return Fracture::SolidKind::TimberBeam;
+    if (Construct.SolidCategory == "boulder") return Fracture::SolidKind::Boulder;
+    if (Construct.SolidCategory == "hollow_core") return Fracture::SolidKind::HollowCore;
+    if (Construct.SolidCategory == "cube") return Fracture::SolidKind::Cube;
+    if (Construct.SolidCategory == "cylinder") return Fracture::SolidKind::Cylinder;
+    if (Construct.SolidCategory == "cone") return Fracture::SolidKind::Cone;
+    return Fracture::SolidKind::Monolith;
+}
+
+Fracture::Polyhedron ResolveWorkspaceBase(const FractureWorkspaceConstruct& Construct)
+{
+    return Fracture::ConstructSolid(ResolveWorkspaceSolid(Construct), { 1.0, 1.0, 1.0 },
+                                    static_cast<uint32_t>(std::max(1, Construct.Spec.Seed)));
+}
+
+Fracture::Request ResolveWorkspaceRequest(const FractureWorkspaceConstruct& Construct) noexcept
+{
+    Fracture::Request Request;
+    Request.Algorithm = static_cast<Fracture::Solver>(std::clamp(Construct.Spec.Solver, 0, 5));
+    Request.EnergyJoules = Construct.Spec.Energy;
+    Request.Seed = static_cast<uint32_t>(std::max(1, Construct.Spec.Seed));
+    Request.FragmentCeiling = static_cast<uint32_t>(std::clamp(Construct.Spec.Ceiling, 2, 256));
+    Request.MinimumPieceSizeMetres = Construct.Spec.MinimumSize;
+    Request.GrainAngleDegrees = Construct.Spec.GrainAngleDeg;
+    Request.BondStrengthScale = Construct.Spec.BondStrengthScale;
+    Request.ImpactPointMetres = { Construct.Spec.ImpactPoint[0], Construct.Spec.ImpactPoint[1], Construct.Spec.ImpactPoint[2] };
+    Request.ImpactNormal = { Construct.Spec.ImpactNormal[0], Construct.Spec.ImpactNormal[1], Construct.Spec.ImpactNormal[2] };
+    return Request;
+}
+
+Fracture::Material ResolveWorkspaceMaterial(const FractureWorkspaceConstruct& Construct) noexcept
+{
+    return Fracture::ResolveMaterialById(QueryFractureMaterial(Construct.Spec.Material).Id);
+}
+
+uint64_t ResolveWorkspaceRecipeHash(const FractureWorkspaceConstruct& Construct) noexcept
+{
+    uint64_t Hash = 1469598103934665603ull;
+    const auto Fold = [&Hash](const void* Bytes, size_t Count)
+    {
+        const auto* Data = static_cast<const unsigned char*>(Bytes);
+        for (size_t Index = 0; Index < Count; ++Index)
+        {
+            Hash ^= Data[Index];
+            Hash *= 1099511628211ull;
+        }
+    };
+    const auto Add = [&Fold](const auto& Value) { Fold(&Value, sizeof(Value)); };
+    const size_t CategorySize = Construct.SolidCategory.size();
+    Add(CategorySize);
+    Fold(Construct.SolidCategory.data(), CategorySize);
+    Add(Construct.Spec.Solver);
+    Add(Construct.Spec.Material);
+    Add(Construct.Spec.Energy);
+    Add(Construct.Spec.Seed);
+    Add(Construct.Spec.Ceiling);
+    Add(Construct.Spec.MinimumSize);
+    Add(Construct.Spec.GrainAngleDeg);
+    Add(Construct.Spec.BondStrengthScale);
+    Fold(Construct.Spec.ImpactPoint, sizeof(Construct.Spec.ImpactPoint));
+    Fold(Construct.Spec.ImpactNormal, sizeof(Construct.Spec.ImpactNormal));
+    return Hash == 0 ? 1 : Hash;
+}
+
+bool RuntimeMatchesActiveRecipe(const FractureWorkspaceState& State) noexcept
+{
+    return State.Runtime != nullptr && State.Runtime->QueryPhysicsReady() &&
+           State.RuntimeConstructIndex == State.ActiveConstruct &&
+           State.RuntimeRecipeHash == ResolveWorkspaceRecipeHash(State.Constructs[State.ActiveConstruct]);
+}
+
+void RememberActiveRuntimeRecipe(FractureWorkspaceState& State) noexcept
+{
+    State.RuntimeConstructIndex = State.ActiveConstruct;
+    State.RuntimeRecipeHash = ResolveWorkspaceRecipeHash(State.Constructs[State.ActiveConstruct]);
+}
+
+bool BakeActiveFracture(FractureWorkspaceState& State, const char* Channel, bool ShowToast = true)
+{
+    FractureWorkspaceConstruct& Construct = State.Constructs[State.ActiveConstruct];
+    const Fracture::Polyhedron Base = ResolveWorkspaceBase(Construct);
+    const Fracture::Request Request = ResolveWorkspaceRequest(Construct);
+    const Fracture::Material Material = ResolveWorkspaceMaterial(Construct);
+    if (State.Runtime != nullptr)
+    {
+        if (!State.Runtime->Bake(Base, Request, Material, &State.RuntimeDiagnostic))
+        {
+            AppendFractureWorkspaceLog(State, Channel, "Native bake refused", State.RuntimeDiagnostic.c_str());
+            if (ShowToast) Toast::Show(State.RuntimeDiagnostic.c_str());
+            return false;
+        }
+        ApplyFractureSolverResult(Construct, State.Runtime->QueryResult());
+    }
+    else
+    {
+        RecomputeFractureReceipt(Construct);
+        if (!Construct.NativeResultValid)
+        {
+            State.RuntimeDiagnostic = Construct.NativeResult.Diagnostic;
+            AppendFractureWorkspaceLog(State, Channel, "Native partition refused", State.RuntimeDiagnostic.c_str());
+            if (ShowToast) Toast::Show(State.RuntimeDiagnostic.c_str());
+            return false;
+        }
+    }
+    if (State.Runtime != nullptr) RememberActiveRuntimeRecipe(State);
+    Construct.BakedResident = true;
+    State.BakeExecuted = true;
+    State.RuntimeDiagnostic.clear();
+    char Detail[128]{};
+    std::snprintf(Detail, sizeof(Detail), "%d convex pieces · %.2f ms%s", Construct.Receipt.FragmentCount,
+                  Construct.Receipt.StepMilliseconds, State.Runtime != nullptr ? " · Jolt world ready" : "");
+    AppendFractureWorkspaceLog(State, Channel, "Native fracture bake complete", Detail);
+    if (ShowToast) Toast::Show(State.Runtime != nullptr ? "Fracture baked into Jolt" : "Native fracture partition baked");
+    return true;
+}
+
+bool StrikeActiveFracture(FractureWorkspaceState& State, const Fracture::Vec3* OptionalPoint = nullptr)
+{
+    FractureWorkspaceConstruct& Construct = State.Constructs[State.ActiveConstruct];
+    const bool RuntimeWasCurrent = RuntimeMatchesActiveRecipe(State);
+    if (OptionalPoint != nullptr)
+    {
+        for (int Axis = 0; Axis < 3; ++Axis) Construct.Spec.ImpactPoint[Axis] = (*OptionalPoint)[Axis];
+    }
+    const Fracture::Request Request = ResolveWorkspaceRequest(Construct);
+    const Fracture::Material Material = ResolveWorkspaceMaterial(Construct);
+    const Fracture::Polyhedron Base = ResolveWorkspaceBase(Construct);
+    bool Success = false;
+    if (State.Runtime != nullptr && RuntimeWasCurrent)
+        Success = State.Runtime->Strike(Request.ImpactPointMetres, Request.ImpactNormal, Request.EnergyJoules,
+                                        &State.RuntimeDiagnostic);
+    else if (State.Runtime != nullptr)
+        Success = State.Runtime->Bake(Base, Request, Material, &State.RuntimeDiagnostic);
+    else
+    {
+        RecomputeFractureReceipt(Construct);
+        Success = Construct.NativeResultValid;
+        State.RuntimeDiagnostic = Success ? std::string{} : Construct.NativeResult.Diagnostic;
+    }
+    if (!Success)
+    {
+        AppendFractureWorkspaceLog(State, "STRIKE", "Native strike refused", State.RuntimeDiagnostic.c_str());
+        Toast::Show(State.RuntimeDiagnostic.empty() ? "Native strike failed" : State.RuntimeDiagnostic.c_str());
+        return false;
+    }
+    if (State.Runtime != nullptr)
+    {
+        ApplyFractureSolverResult(Construct, State.Runtime->QueryResult());
+        RememberActiveRuntimeRecipe(State);
+    }
+    Construct.BakedResident = true;
+    State.StrikeExecuted = true;
+    State.RuntimeDiagnostic.clear();
+    AppendFractureWorkspaceLog(State, "STRIKE", "Impact solved and Jolt shards released",
+                               State.Runtime != nullptr ? "partition · convex hulls · impact velocities · Jolt 5.6" : "native partition solved");
+    Toast::Show(State.Runtime != nullptr ? "Impact solved · Jolt shards released" : "Native fracture solved");
+    return true;
+}
+
+void StepActiveFracturePhysics(FractureWorkspaceState& State, double DeltaSeconds)
+{
+    if (State.Runtime == nullptr) return;
+    if (!RuntimeMatchesActiveRecipe(State) && !BakeActiveFracture(State, "BAKE", false)) return;
+    State.Runtime->Step(DeltaSeconds, 2);
+    State.PhysicsStepExecuted = true;
+    State.TimelineActive = std::clamp(State.TimelineActive + DeltaSeconds, 0.0, State.TimelineDuration);
+    ApplyFractureSolverResult(State.Constructs[State.ActiveConstruct], State.Runtime->QueryResult());
+}
+
+void ReassembleActiveFracture(FractureWorkspaceState& State)
+{
+    State.TimelinePlaying = false;
+    State.TimelineActive = 0.0;
+    State.ExplodeAmount = 0.0;
+    if (State.Runtime != nullptr)
+    {
+        if (!RuntimeMatchesActiveRecipe(State) && !BakeActiveFracture(State, "BAKE", false)) return;
+        if (!State.Runtime->Reassemble(&State.RuntimeDiagnostic))
+        {
+            AppendFractureWorkspaceLog(State, "SCENE", "Reassemble refused", State.RuntimeDiagnostic.c_str());
+            Toast::Show(State.RuntimeDiagnostic.c_str());
+            return;
+        }
+        ApplyFractureSolverResult(State.Constructs[State.ActiveConstruct], State.Runtime->QueryResult());
+    }
+}
+
 //------------------------------------------------------------------------------------------------------------------------
 //                                                    TOP BAR
 //------------------------------------------------------------------------------------------------------------------------
@@ -322,6 +514,7 @@ void ConstructTopBar(FractureWorkspaceState& State, PanelCursor& Root)
             {
                 State.MatrixOpen = false;
                 State.LogOpen    = false;
+                State.LeaveRequested = true;
             }
             else if (Index == 1) State.MatrixOpen = true;
             else State.LogOpen = !State.LogOpen;
@@ -349,13 +542,14 @@ void ConstructTopBar(FractureWorkspaceState& State, PanelCursor& Root)
     if (InvisibleRect("##TopBarHelp", HelpMin, HelpMax))
         NoopFractureWorkspaceCommand(State, "SCENE", "Help refused", "Help is a NOOP in this shell");
 
-    const float EngineWide = Root.Measure(Faces.SemiBold, 9.5f, "SHELL · LOCAL", 0.9f) + 30.0f;
+    const char* EngineStatus = RuntimeMatchesActiveRecipe(State) ? "NATIVE · JOLT" : "NATIVE · CPU";
+    const float EngineWide = Root.Measure(Faces.SemiBold, 9.5f, EngineStatus, 0.9f) + 30.0f;
     const ImVec2 EngineMax(HelpMin.x - 8.0f, Bar.y + 33.0f);
     const ImVec2 EngineMin(EngineMax.x - EngineWide, Bar.y + 13.0f);
     DrawList->AddRectFilled(EngineMin, EngineMax, ResolveCssColour(0x7FD08A1F), 10.0f);
     DrawList->AddCircleFilled(ImVec2(EngineMin.x + 12.0f, Bar.y + 23.0f), 3.5f, ResolveCssColour(0x7FD08AFF), 12);
     Root.Text(Faces.SemiBold, 9.5f, EngineMin.x + 20.0f, Bar.y + 23.0f - 0.5f * 9.5f * 1.4f, 1.4f,
-              ResolveCssColour(0x7FD08AFF), "SHELL · LOCAL", 0.9f);
+              ResolveCssColour(0x7FD08AFF), EngineStatus, 0.9f);
 }
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -559,7 +753,7 @@ void ConstructOutlinerPanel(FractureWorkspaceState& State, const EditorTypefaces
     }
     const ImVec2 Foot = Panel.Space(16.0f, 6.0f, 0.0f);
     Panel.Text(Faces.Regular, 10.0f, Foot.x, Foot.y, 1.4f, ResolveCssColour(0x5E5E5EFF),
-               "Static shell · nodes stage locally");
+               "Native partitions · isolated Jolt shard world");
 }
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -692,23 +886,117 @@ void ConstructShardStage(FractureWorkspaceState& State, const EditorTypefaces& F
     const FractureWorkspaceConstruct& Cst = State.Constructs[State.ActiveConstruct];
     const FractureReceipt&            Rec = Cst.Receipt;
     const ImU32                       Accent = QueryNodeAccent(State, State.ActiveConstruct);
-    const int                         Shown = Rec.FragmentCount * 2 < 44 ? Rec.FragmentCount * 2 : 44;
-    for (int I = 0; I < Shown; ++I)
+    const Fracture::Result& Partition = Cst.NativeResult;
+    if (Cst.NativeResultValid && !Partition.Fragments.empty())
     {
-        const uint32_t H  = HashU32(static_cast<uint32_t>(Cst.Spec.Seed * 31 + I * 777));
-        const float    Fx = static_cast<float>(H % 1000) / 1000.0f - 0.5f;
-        const float    Fy = static_cast<float>((H >> 9) % 1000) / 1000.0f - 0.5f;
-        const float    R  = 8.0f + static_cast<float>((H >> 5) % 100) / 100.0f * 22.0f;
-        const float    Stress = static_cast<float>((H >> 13) % 100) / 100.0f;
-        const ImVec2   At(CentreX + Fx * Wide * 0.50f, CentreY + Fy * Tall * 0.44f);
-        const ImU32    Fill = Stress > 0.65f ? ResolveCssColour(0xE8C27A2E) : Accent;
-        const ImVec2   P0(At.x - R, At.y - R * 0.62f), P1(At.x + R * 0.7f, At.y - R * 0.9f);
-        const ImVec2   P2(At.x + R, At.y + R * 0.6f), P3(At.x - R * 0.6f, At.y + R * 0.85f);
-        DrawList->AddQuadFilled(P0, P1, P2, P3, (Fill & 0x00FFFFFF) | (0x4Au << 24)); // 📝 ImU32 is ABGR: alpha rides the high byte.
-        DrawList->AddQuad(P0, P1, P2, P3, Stress > 0.65f ? ResolveCssColour(0xE8C27ACC) : Accent, 1.0f);
+        const Fracture::Metrics& Base = Partition.BaseMetrics;
+        const double FitX = (Wide * 0.34) / std::max(0.05, Base.Span[0]);
+        const double FitY = (Tall * 0.50) / std::max(0.05, Base.Span[1]);
+        const double PixelScale = std::min(FitX, FitY);
+        struct ProjectedShard
+        {
+            std::vector<ImVec2> Hull;
+            double Depth = 0.0;
+            double Stress = 0.0;
+            uint32_t Seed = 0;
+        };
+        std::vector<ProjectedShard> Shards;
+        Shards.reserve(Partition.Fragments.size());
+        const bool HasJolt = RuntimeMatchesActiveRecipe(State);
+        for (const Fracture::Fragment& Fragment : Partition.Fragments)
+        {
+            Fracture::BodyPose Pose;
+            const bool HasPose = HasJolt && State.Runtime->QueryFragmentBody(Fragment.Index, Pose);
+            Fracture::Vec3 Position = HasPose ? Pose.PositionMetres : Fragment.ShapeMetrics.Centroid;
+            if (!HasPose)
+            {
+                Fracture::Vec3 Radial{ Fragment.ShapeMetrics.Centroid[0] - Base.Centroid[0],
+                                       Fragment.ShapeMetrics.Centroid[1] - Base.Centroid[1],
+                                       Fragment.ShapeMetrics.Centroid[2] - Base.Centroid[2] };
+                const double RadialLength = std::sqrt(Radial[0] * Radial[0] + Radial[1] * Radial[1] + Radial[2] * Radial[2]);
+                if (RadialLength > 1.0e-8)
+                    for (double& Component : Radial) Component /= RadialLength;
+                else Radial = { 0.0, 0.0, 0.0 };
+                const uint32_t Scatter = HashU32(static_cast<uint32_t>(Cst.Spec.Seed * 31 + Fragment.Index * 777));
+                const double Jitter = (static_cast<double>((Scatter >> 7) % 1000) / 1000.0 - 0.5) * Base.Radius * 0.10;
+                for (int Axis = 0; Axis < 3; ++Axis)
+                    Position[Axis] += Radial[Axis] * (State.ExplodeAmount * Base.Radius * 1.7 + Jitter);
+            }
+            struct Point2 { double X, Y, Depth; };
+            std::vector<Point2> Points;
+            Points.reserve(Fragment.Shape.Vertices.size());
+            for (const Fracture::Vec3& Vertex : Fragment.Shape.Vertices)
+            {
+                Fracture::Vec3 Relative{ Vertex[0] - Fragment.ShapeMetrics.Centroid[0],
+                                         Vertex[1] - Fragment.ShapeMetrics.Centroid[1],
+                                         Vertex[2] - Fragment.ShapeMetrics.Centroid[2] };
+                if (HasPose)
+                {
+                    const double Qx = Pose.Orientation[0], Qy = Pose.Orientation[1], Qz = Pose.Orientation[2], Qw = Pose.Orientation[3];
+                    const Fracture::Vec3 T{ 2.0 * (Qy * Relative[2] - Qz * Relative[1]),
+                                            2.0 * (Qz * Relative[0] - Qx * Relative[2]),
+                                            2.0 * (Qx * Relative[1] - Qy * Relative[0]) };
+                    Relative = { Relative[0] + Qw * T[0] + (Qy * T[2] - Qz * T[1]),
+                                 Relative[1] + Qw * T[1] + (Qz * T[0] - Qx * T[2]),
+                                 Relative[2] + Qw * T[2] + (Qx * T[1] - Qy * T[0]) };
+                }
+                const double X = Position[0] + Relative[0];
+                const double Y = Position[1] + Relative[1];
+                const double Z = Position[2] + Relative[2];
+                Points.push_back({ CentreX + (X - Base.Centroid[0]) * PixelScale,
+                                   CentreY - (Y - Base.Centroid[1]) * PixelScale, Z });
+            }
+            std::sort(Points.begin(), Points.end(), [](const Point2& A, const Point2& B) {
+                return A.X == B.X ? A.Y < B.Y : A.X < B.X;
+            });
+            Points.erase(std::unique(Points.begin(), Points.end(), [](const Point2& A, const Point2& B) {
+                return std::fabs(A.X - B.X) < 0.01 && std::fabs(A.Y - B.Y) < 0.01;
+            }), Points.end());
+            if (Points.size() < 3) continue;
+            const auto Cross2 = [](const Point2& A, const Point2& B, const Point2& C) {
+                return (B.X - A.X) * (C.Y - A.Y) - (B.Y - A.Y) * (C.X - A.X);
+            };
+            std::vector<Point2> Hull;
+            Hull.reserve(Points.size() * 2);
+            for (const Point2& Point : Points)
+            {
+                while (Hull.size() >= 2 && Cross2(Hull[Hull.size() - 2], Hull.back(), Point) <= 0.0) Hull.pop_back();
+                Hull.push_back(Point);
+            }
+            const size_t Lower = Hull.size();
+            for (auto It = Points.rbegin() + 1; It != Points.rend(); ++It)
+            {
+                while (Hull.size() > Lower && Cross2(Hull[Hull.size() - 2], Hull.back(), *It) <= 0.0) Hull.pop_back();
+                Hull.push_back(*It);
+            }
+            if (Hull.size() > 1) Hull.pop_back();
+            if (Hull.size() < 3) continue;
+            ProjectedShard DrawShard;
+            DrawShard.Depth = Position[2];
+            DrawShard.Stress = Fragment.StressRatio;
+            DrawShard.Seed = HashU32(static_cast<uint32_t>(Cst.Spec.Seed * 31 + Fragment.Index * 777));
+            DrawShard.Hull.reserve(Hull.size());
+            for (const Point2& Point : Hull) DrawShard.Hull.emplace_back(static_cast<float>(Point.X), static_cast<float>(Point.Y));
+            Shards.push_back(std::move(DrawShard));
+        }
+        std::sort(Shards.begin(), Shards.end(), [](const ProjectedShard& A, const ProjectedShard& B) {
+            return A.Depth < B.Depth;
+        });
+        DrawList->PushClipRect(Min, Max, true);
+        for (const ProjectedShard& Shard : Shards)
+        {
+            const float Alpha = 0x65 + static_cast<float>((Shard.Seed >> 16) % 0x35);
+            const ImU32 Fill = Shard.Stress > 0.65f ? ResolveCssColour(0xE8C27AFF) : Accent;
+            DrawList->AddConvexPolyFilled(Shard.Hull.data(), static_cast<int>(Shard.Hull.size()),
+                                          (Fill & 0x00FFFFFF) | (static_cast<ImU32>(Alpha) << 24));
+            DrawList->AddPolyline(Shard.Hull.data(), static_cast<int>(Shard.Hull.size()),
+                                  Shard.Stress > 0.65f ? ResolveCssColour(0xE8C27ACC) : ResolveCssColour(0xFFFFFF6E),
+                                  ImDrawFlags_Closed, 1.15f);
+        }
+        DrawList->PopClipRect();
     }
 
-    // 📝 Impact reticle + callout: live receipt figures over static decor.
+    // Impact reticle + callout over the projected native fragment hulls.
     DrawList->AddCircle(ImVec2(CentreX, CentreY), 26.0f, ResolveCssColour(0xE8C27ACC), 40, 1.5f);
     DrawList->AddLine(ImVec2(CentreX - 38.0f, CentreY), ImVec2(CentreX - 26.0f, CentreY),
                       ResolveCssColour(0xE8C27ACC), 1.5f);
@@ -806,18 +1094,22 @@ void ConstructShardStage(FractureWorkspaceState& State, const EditorTypefaces& F
         (void)GlyphSymbol::Construct(DrawList, "StudioReset", ImVec2(KeyMin.x + 10.0f, KeyMin.y + 10.0f), 14.0f, 1.8f,
                                      ResolveCssColour(0xBCBCBCFF));
         RecordRect(State, "Surface/Reassemble", KeyMin, KeyMax);
-        if (InvisibleRect("##Reassemble", KeyMin, KeyMax))
-        {
-            State.TimelinePlaying = false;
-            State.TimelineActive  = 0.0;
-            State.ExplodeAmount   = 0.0;
-        }
+        if (InvisibleRect("##Reassemble", KeyMin, KeyMax)) ReassembleActiveFracture(State);
     }
 
     ImGui::PushID("ShardStage");
     RecordRect(State, "Surface/Shards", Min, Max);
     if (InvisibleRect("##ShardStage", Min, Max))
-        NoopFractureWorkspaceCommand(State, "STRIKE", "Mesh strike refused", "Strike is a NOOP in the UI shell");
+    {
+        const Fracture::Metrics& Base = State.Constructs[State.ActiveConstruct].NativeResult.BaseMetrics;
+        const ImVec2 Mouse = ImGui::GetIO().MousePos;
+        const double Fx = std::clamp((Mouse.x - Min.x) / std::max(1.0f, Wide), 0.0f, 1.0f);
+        const double Fy = std::clamp((Mouse.y - Min.y) / std::max(1.0f, Tall), 0.0f, 1.0f);
+        const Fracture::Vec3 Impact{ Base.BoundsMin[0] + Fx * Base.Span[0],
+                                     Base.BoundsMax[1] - Fy * Base.Span[1],
+                                     Base.BoundsMax[2] };
+        (void)StrikeActiveFracture(State, &Impact);
+    }
     ImGui::PopID();
 }
 
@@ -845,20 +1137,24 @@ void ConstructTransportStrip(FractureWorkspaceState& State, const EditorTypeface
     float KeyX = Min.x + 14.0f;
     const float KeyY = Min.y + 15.0f;
     if (RoundKey("##TransportReset", "Transport/Reset", "StudioReset", ImVec2(KeyX, KeyY),
-                 ResolveCssColour(0xFFFFFF24)))
-    {
-        State.TimelinePlaying = false;
-        State.TimelineActive  = 0.0;
-        State.ExplodeAmount   = 0.0;
-    }
+                 ResolveCssColour(0xFFFFFF24))) ReassembleActiveFracture(State);
     KeyX += 42.0f;
     if (RoundKey("##TransportPlay", "Transport/Play", State.TimelinePlaying ? "StudioPause" : "StudioPlay",
                  ImVec2(KeyX, KeyY), ResolveCssColour(0xE8C27A66)))
-        State.TimelinePlaying = !State.TimelinePlaying;
+    {
+        if (State.TimelinePlaying) State.TimelinePlaying = false;
+        else if (State.Runtime == nullptr || RuntimeMatchesActiveRecipe(State) || BakeActiveFracture(State, "BAKE"))
+            State.TimelinePlaying = true;
+    }
     KeyX += 42.0f;
     if (RoundKey("##TransportStep", "Transport/Step", "StudioStep", ImVec2(KeyX, KeyY),
                  ResolveCssColour(0xFFFFFF24)))
-        NoopFractureWorkspaceCommand(State, "TRANSPORT", "Step 16 ms refused", "Stepping is a NOOP in this shell");
+    {
+        const double Step = (1.0 / 60.0) * State.PlaybackRate;
+        if (State.Runtime != nullptr) StepActiveFracturePhysics(State, Step);
+        else State.TimelineActive = std::min(State.TimelineDuration, State.TimelineActive + Step);
+        AppendFractureWorkspaceLog(State, "TRANSPORT", "Stepped native fracture scene", State.Runtime != nullptr ? "Jolt · 16 ms" : "solver-only timeline");
+    }
     KeyX += 52.0f;
 
     char Timecode[24]{};
@@ -911,8 +1207,7 @@ void ConstructTransportStrip(FractureWorkspaceState& State, const EditorTypeface
     Strip.Text(Faces.Medium, 11.5f, BakeMin.x + 15.0f, Min.y + 32.0f - 0.5f * 11.5f * 1.38f, 1.38f,
                ResolveCssColour(0xD8D8D8FF), "Bake  B");
     RecordRect(State, "Transport/Bake", BakeMin, BakeMax);
-    if (InvisibleRect("##Bake", BakeMin, BakeMax))
-        NoopFractureWorkspaceCommand(State, "BAKE", "Bake refused", "Bake is a NOOP in the UI shell");
+    if (InvisibleRect("##Bake", BakeMin, BakeMax)) (void)BakeActiveFracture(State, "BAKE");
 
     const float StrikeWide = Strip.Measure(Faces.Medium, 11.5f, "Strike  L") + 30.0f;
     const ImVec2 StrikeMax(BakeMin.x - 8.0f, Min.y + 49.0f);
@@ -923,8 +1218,7 @@ void ConstructTransportStrip(FractureWorkspaceState& State, const EditorTypeface
     Strip.Text(Faces.Medium, 11.5f, StrikeMin.x + 32.0f, Min.y + 32.0f - 0.5f * 11.5f * 1.38f, 1.38f,
                ResolveCssColour(0x1A1A1AFF), "Strike  L");
     RecordRect(State, "Transport/Strike", StrikeMin, StrikeMax);
-    if (InvisibleRect("##Strike", StrikeMin, StrikeMax))
-        NoopFractureWorkspaceCommand(State, "STRIKE", "Strike refused", "Strike is a NOOP in the UI shell");
+    if (InvisibleRect("##Strike", StrikeMin, StrikeMax)) (void)StrikeActiveFracture(State);
 }
 
 void ConstructTimeline(FractureWorkspaceState& State, const EditorTypefaces& Faces, ImDrawList* DrawList, ImVec2 Min,
@@ -1131,6 +1425,21 @@ void ConstructSolverMatrix(FractureWorkspaceState& State, const EditorTypefaces&
 
 } // namespace
 
+bool BakeFractureWorkspaceActive(FractureWorkspaceState& State, const char* Channel)
+{
+    return BakeActiveFracture(State, Channel != nullptr ? Channel : "BAKE");
+}
+
+bool StrikeFractureWorkspaceActive(FractureWorkspaceState& State)
+{
+    return StrikeActiveFracture(State);
+}
+
+void ReassembleFractureWorkspaceActive(FractureWorkspaceState& State)
+{
+    ReassembleActiveFracture(State);
+}
+
 //------------------------------------------------------------------------------------------------------------------------
 //                                                    ROOT
 //------------------------------------------------------------------------------------------------------------------------
@@ -1235,8 +1544,26 @@ void ApplyFractureWorkspaceLink(FractureWorkspaceState& State, AssetBrowserLink*
 }
 
 void ConstructFractureWorkspace(FractureWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Size,
-                                AssetBrowserLink* Link)
+                                AssetBrowserLink* Link, Fracture::IFractureStudioRuntime* Runtime,
+                                double DeltaSeconds)
 {
+    State.Runtime = Runtime;
+    State.FrameDeltaSeconds = std::clamp(DeltaSeconds, 0.0, 0.25);
+    if (!State.Constructs[State.ActiveConstruct].NativeResultValid)
+        RecomputeFractureReceipt(State.Constructs[State.ActiveConstruct]);
+    if (State.TimelinePlaying)
+    {
+        const double Step = State.FrameDeltaSeconds * State.PlaybackRate;
+        if (State.Runtime != nullptr)
+        {
+            if (!RuntimeMatchesActiveRecipe(State) && !BakeActiveFracture(State, "BAKE", false))
+                State.TimelinePlaying = false;
+            else
+                StepActiveFracturePhysics(State, Step);
+        }
+        else State.TimelineActive = std::clamp(State.TimelineActive + Step, 0.0, State.TimelineDuration);
+        if (State.TimelineActive >= State.TimelineDuration) State.TimelinePlaying = false;
+    }
     ApplyFractureWorkspaceLink(State, Link);
     State.Rects.clear();
     ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
@@ -1300,7 +1627,7 @@ void ConstructFractureWorkspace(FractureWorkspaceState& State, const EditorTypef
     PanelCursor FootCursor{ DrawList, &Faces, 1.0f, CentreMin.x, ViewportMax.x - CentreMin.x, FootY };
     FootCursor.Text(Faces.Regular, 10.5f, CentreMin.x + 14.0f, FootY + 15.0f - 0.5f * 10.5f * 1.4f, 1.4f,
                     ResolveCssColour(0x848484FF),
-                    "Staged values only · shards, reticle & bricks are static shell decor");
+                    "Native solver output · convex shards and live Jolt poses");
     const float LogPillWide = FootCursor.Measure(Faces.Medium, 11.0f, "Log Stream") + 18.0f;
     const ImVec2 LogPillMax(ViewportMax.x - 14.0f, FootY + 26.0f);
     const ImVec2 LogPillMin(LogPillMax.x - LogPillWide, FootY + 4.0f);
@@ -1415,9 +1742,9 @@ void ConstructFractureWorkspace(FractureWorkspaceState& State, const EditorTypef
                     ResolveCssColour(0x707070FF), "FRONTIER / FRACTURE", 0.9f);
         Status.Text(Faces.SemiBold, 10.0f, StatusMax.x - 14.0f - 22.0f, MidY - 0.5f * 10.0f * 1.4f, 1.4f,
                     ResolveCssColour(0xE8C27AFF), "2.0");
-        const float CpuTag = Status.Measure(Faces.Regular, 10.5f, "CPU shell · no GPU");
+        const float CpuTag = Status.Measure(Faces.Regular, 10.5f, "CPU solver · Jolt physics");
         Status.Text(Faces.Regular, 10.5f, StatusMax.x - 14.0f - RightTag - 34.0f - 18.0f - CpuTag,
-                    MidY - 0.5f * 10.5f * 1.4f, 1.4f, ResolveCssColour(0x5E5E5EFF), "CPU shell · no GPU");
+                    MidY - 0.5f * 10.5f * 1.4f, 1.4f, ResolveCssColour(0x5E5E5EFF), "CPU solver · Jolt physics");
     }
 
     ConstructSolverMatrix(State, Faces, ImVec2(0.0f, 0.0f), Size);
