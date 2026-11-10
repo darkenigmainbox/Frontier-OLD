@@ -612,7 +612,19 @@ SceneViewportRequest ConstructPhotometricPreviewRequestImpl(const PhotometricWor
         if (!Source.Visible) continue;
         const PhotometricLightProps& Props = Source.Props;
         SceneViewportLuminaire Light;
-        Light.Category = Source.Type == 0 ? 0u : 5u; // Omni for point sources; native clustered floodlight for directed/area emitters.
+        Light.Category = Source.Type == 0 ? 0u : 5u; // Omni for points; engine floodlight for generic spots and luminous surfaces.
+        if (Source.Type == 2 && Props.UseMeasuredIes && Props.CustomIesProfile < 0)
+        {
+            // The native C++ light library has these measured luminaire families; use their real beam models, not a generic cone.
+            switch (Props.MeasuredProfile)
+            {
+            case 0: Light.Category = 2u; break; // low beam
+            case 1: Light.Category = 3u; break; // high beam
+            case 2: Light.Category = 4u; break; // fog cutoff
+            case 3: Light.Category = 1u; break; // roadway batwing
+            default: Light.Category = 5u; break;
+            }
+        }
         Light.Position = {-40.0 + Props.Position[0], Props.Position[2], Props.Position[1]}; // prototype Y-up → renderer Z-up.
         if (Props.HasTarget)
         {
@@ -630,6 +642,10 @@ SceneViewportRequest ConstructPhotometricPreviewRequestImpl(const PhotometricWor
         const double InnerDegrees = OuterDegrees * (1.0 - std::clamp(Props.Penumbra, 0.0, 0.98));
         Light.Params = {std::cos(InnerDegrees * 0.017453292519943295), std::cos(OuterDegrees * 0.017453292519943295),
                         static_cast<double>(Props.MeasuredProfile), 1.0};
+        if (Light.Category == 1u) Light.Params = {0.70, 0.20, 1.0, 1.0};
+        else if (Light.Category == 2u) Light.Params = {0.90, 0.60, 0.0, 1.0};
+        else if (Light.Category == 3u) Light.Params = {0.98, 0.85, 0.0, 1.0};
+        else if (Light.Category == 4u) Light.Params = {0.85, 0.40, 0.0, 1.0};
         if (Source.Type == 0) Light.Intensity = Props.Intensity * Props.Multiplier;
         else if (Source.Type == 1) Light.Intensity = Props.Intensity * Props.Multiplier;
         else if (Source.Type == 2 || Source.Type == 3 || Source.Type == 4) Light.Intensity = Props.Lumens * Props.Multiplier / (4.0 * 3.141592653589793);

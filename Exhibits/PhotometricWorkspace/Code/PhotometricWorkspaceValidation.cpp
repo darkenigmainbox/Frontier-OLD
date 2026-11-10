@@ -121,6 +121,8 @@ int main(int ArgumentCount, char** Arguments)
             Confirm(Preview.PanelWidth == 900.0f && Preview.PanelHeight == 600.0f && Preview.PixelDensity == 2.0f,
                     "The native preview request lost the stage extent or pixel density");
             Confirm(Preview.Luminaires.size() == 6, "The staged photometric rig did not expose its six visible luminaires to the renderer");
+            Confirm(Preview.Luminaires.front().Category == 2u,
+                    "The measured ECE low beam did not map onto the native ReSTIR low-beam light model");
             Confirm(std::fabs(Preview.Luminaires.front().Position[0] + 41.15) < 1.0e-9,
                     "The staged light was not transformed from Photometric Studio coordinates into the renderer's world");
             Confirm(Preview.Luminaires.front().Intensity > 0.0 && Preview.Luminaires.front().Reach > 0.0,

@@ -12,4 +12,13 @@ if(BUILD_TESTING)
         "${CMAKE_BINARY_DIR}/PhotometricWorkspaceValidation.ppm" "${CMAKE_SOURCE_DIR}/EngineContent/FontArchives"
         "${CMAKE_SOURCE_DIR}/Exhibits/PhotometricWorkspace/Fixtures/TypeC_Imported.ies")
     set_tests_properties(PhotometricWorkspaceValidation PROPERTIES TIMEOUT 180)
+
+    # 📝 The actual Photometric Studio stage through stored C++ ReSTIR GI shaders on a CPU Vulkan device, then CPU-composited UI evidence.
+    add_executable(PhotometricWorkspaceCapture
+        Exhibits/PhotometricWorkspace/Code/PhotometricWorkspaceCapture.cpp
+        Engine/Render/StbImageWriteImplementation.cpp)
+    target_include_directories(PhotometricWorkspaceCapture PRIVATE
+        "${CMAKE_SOURCE_DIR}"
+        "${CMAKE_SOURCE_DIR}/ExternalPackages/stb")
+    target_link_libraries(PhotometricWorkspaceCapture PRIVATE EverestProjectEditor)
 endif()
