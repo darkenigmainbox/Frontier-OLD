@@ -283,6 +283,8 @@ add_library(FrontierSceneEditorUI STATIC
     Frontier/Engine/Interface/Workspaces/FractureWorkspaceCatalogue.cpp
     Frontier/Engine/Interface/Workspaces/FractureWorkspaceInspector.cpp
     Frontier/Engine/Interface/Workspaces/FractureWorkspace.cpp
+    Frontier/Engine/Photometry/PhotometricIes.cpp
+    Frontier/Engine/Interface/Workspaces/PhotometricIesFileDialog.cpp
     Frontier/Engine/Interface/Workspaces/PhotometricWorkspaceCatalogue.cpp
     Frontier/Engine/Interface/Workspaces/PhotometricWorkspaceInspector.cpp
     Frontier/Engine/Interface/Workspaces/PhotometricWorkspace.cpp
@@ -298,6 +300,9 @@ target_include_directories(FrontierSceneEditorUI PUBLIC
 target_compile_definitions(FrontierSceneEditorUI PUBLIC FRONTIER_WITH_INTERFACE_SDK=1 FRONTIER_EDITOR_PROFILE=1 FRONTIER_EDITOR=1)
 target_include_directories(FrontierSceneEditorUI PRIVATE "${CMAKE_SOURCE_DIR}/ExternalPackages/stb")
 target_link_libraries(FrontierSceneEditorUI PUBLIC FrontierEditorUI FrontierInterfaceExtension Threads::Threads PRIVATE FrontierSurfaceRasterization FrontierEnvironmentRendering)
+if(WIN32)
+    target_link_libraries(FrontierSceneEditorUI PRIVATE comdlg32)
+endif()
 
 include(Automation/StageProjectContent.cmake)
 

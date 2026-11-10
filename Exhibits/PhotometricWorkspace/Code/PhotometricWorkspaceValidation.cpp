@@ -5,6 +5,7 @@
 // and warm log lines and change nothing.
 
 #include "Frontier/Engine/Interface/Workspaces/PhotometricWorkspace.h"
+#include "Frontier/Engine/Interface/Workspaces/PhotometricIesFileDialog.h"
 #include "Frontier/Engine/Interface/Controls/Toast.h"
 #include "Frontier/Engine/Interface/InspectorControls.h"
 #include "Engine/Interface/TypefaceRegistry.h"
@@ -108,6 +109,79 @@ int main(int ArgumentCount, char** Arguments)
             Confirm(Lux > 57.0 && Lux < 59.0, "The wall-screen estimate left its 57-59 lx band");
             Confirm(State.SunSolved.ElevationDeg > 41.0 && State.SunSolved.ElevationDeg < 42.0,
                     "The 14:30 sun left its 41-42° band");
+        }
+        // Native LM-63 Type-C import: multiplier, C-plane interpolation, workspace assignment, and wall-lux response.
+        if (ArgumentCount >= 4)
+        {
+            PhotometricIesProfile Parsed{};
+            std::string ParseError;
+            Confirm(LoadPhotometricIesFile(Arguments[3], Parsed, ParseError), "The Type-C fixture did not parse");
+            Confirm(Parsed.PhotometricType == 1 && Parsed.NumberOfLamps == 1 && Parsed.UnitsType == 2,
+                    "The imported LM-63 header fields were not retained");
+            Confirm(Parsed.VerticalAnglesDeg.size() == 5 && Parsed.HorizontalAnglesDeg.size() == 3,
+                    "The imported LM-63 angle counts changed");
+            Confirm(std::fabs(Parsed.Candela[0] - 2000.0f) < 1.0e-4f &&
+                        std::fabs(Parsed.Candela[5] - 400.0f) < 1.0e-4f,
+                    "The candela multiplier or C-plane-major grid order was lost");
+            Confirm(Parsed.PeakCandela == 2000.0 && SamplePhotometricIes(Parsed, 0.0, 0.0) > 0.99f &&
+                        SamplePhotometricIes(Parsed, 90.0, 0.0) > 0.15f &&
+                        SamplePhotometricIes(Parsed, 90.0, 0.0) < 0.25f,
+                    "The imported normalized C0/C90 sampling atlas is incorrect");
+            Confirm(!Parsed.SourcePath.empty() && Parsed.Name == "TypeC_Imported",
+                    "The loaded IES source identity was not retained");
+
+            const PhotometricIesProfile BeforeRejectedImport = Parsed;
+            const auto RejectWithoutReplacement = [&](const std::string& Text, const char* Description)
+            {
+                std::string Rejection;
+                Confirm(!ParsePhotometricIes(Text, "RejectedInput", Parsed, Rejection) && !Rejection.empty() &&
+                            Parsed.PeakCandela == BeforeRejectedImport.PeakCandela,
+                        Description);
+            };
+            RejectWithoutReplacement("IESNA:LM-63-2002\nTILT=INCLUDE\n",
+                                     "Unsupported tilt input was accepted or partially replaced a valid profile");
+            RejectWithoutReplacement("IESNA:LM-63-2002\nTILT=NONE\n1 1000 1 2 1 2 2 0 0 0 1 1 70\n0 180\n0\n10 10\n",
+                                     "Unsupported non-Type-C photometry was accepted or replaced the valid profile");
+            RejectWithoutReplacement("IESNA:LM-63-2002\nTILT=NONE\n1 1000 1 182 1 1 2 0 0 0 1 1 70\n",
+                                     "An excessive vertical-angle count was accepted or replaced the valid profile");
+            RejectWithoutReplacement("IESNA:LM-63-2002\nTILT=NONE\n1 1000 1 2 1 1 2 0 0 0 1 1 70\n0 180\n0\n10\n",
+                                     "A truncated candela grid was accepted or replaced the valid profile");
+            const std::string OversizedInput(static_cast<size_t>(PhotometricIesMaximumFileBytes + 1), ' ');
+            RejectWithoutReplacement(OversizedInput, "An IES file above the 4 MiB cap was accepted or replaced the valid profile");
+
+            PhotometricWorkspaceState ImportedState{};
+            ConstructPhotometricWorkspaceState(ImportedState);
+            Confirm(LoadPhotometricWorkspaceIes(ImportedState, Arguments[3], ParseError),
+                    "The workspace did not import and assign the Type-C fixture");
+            Confirm(ImportedState.LoadedIesProfiles.size() == 1 &&
+                        ImportedState.Lights[0].Props.CustomIesProfile == 0 &&
+                        ImportedState.Lights[0].Props.UseMeasuredIes,
+                    "The imported Type-C curve was not assigned to the selected IES luminaire");
+            const double BaselineLux = QueryPhotometricWallLux(State.Lights, 8);
+            const double ImportedLux = QueryPhotometricWallLux(ImportedState.Lights, 8,
+                ImportedState.LoadedIesProfiles.data(), static_cast<int>(ImportedState.LoadedIesProfiles.size()));
+            PhotometricIesProfile Dimmed = ImportedState.LoadedIesProfiles[0];
+            Dimmed.PeakCandela *= 0.1;
+            for (float& Candela : Dimmed.Candela) Candela *= 0.1f;
+            const double DimmedLux = QueryPhotometricWallLux(ImportedState.Lights, 8, &Dimmed, 1);
+            std::fprintf(stdout, "IES wall-lux probe: baseline=%.4f imported=%.4f dimmed=%.4f lx\n",
+                         BaselineLux, ImportedLux, DimmedLux);
+            Confirm(std::fabs(ImportedLux - BaselineLux) > 4.0,
+                    "The imported candela distribution did not affect the photometric wall estimate");
+            Confirm(ImportedLux > DimmedLux + 1.0,
+                    "The wall-lux estimate ignored the imported candela amplitude");
+
+            PhotometricLight Probe = ImportedState.Lights[0];
+            Probe.Props.Lumens = 1000.0;
+            Probe.Props.Multiplier = 1.0;
+            Probe.Props.Position[0] = 0.0; Probe.Props.Position[1] = 1.4; Probe.Props.Position[2] = -4.25;
+            Probe.Props.Target[0] = 0.0; Probe.Props.Target[1] = 1.4; Probe.Props.Target[2] = -5.25;
+            const double C0WallLux = QueryPhotometricWallLux(&Probe, 1, ImportedState.LoadedIesProfiles.data(), 1);
+            Probe.Props.Position[0] = -1.0; Probe.Props.Position[1] = 1.4; Probe.Props.Position[2] = -5.25;
+            Probe.Props.Target[0] = -1.0; Probe.Props.Target[1] = 1.4; Probe.Props.Target[2] = -6.25;
+            const double C90WallLux = QueryPhotometricWallLux(&Probe, 1, ImportedState.LoadedIesProfiles.data(), 1);
+            Confirm(C0WallLux > C90WallLux * 1.8,
+                    "The imported wall-lux probe did not distinguish its forward C0 curve from the side C90 curve");
         }
 
         // 2. Outliner: luminaire rows select silently; eye keys toggle visibility and the census follows.
@@ -281,17 +355,34 @@ int main(int ArgumentCount, char** Arguments)
             Confirm(State.Selected == 2, "The refused delete moved the selection");
         }
 
-        // 12. Top bar: file and suite keys refuse; the goniometer opens the matrix.
+        // 12. Top bar: .ies opens a native picker/path modal; export and suite actions remain explicit NOOPs.
         {
             const int NoopsBefore = State.NoopCount;
-            Click("TopBar/Load");
-            Confirm(State.NoopCount == NoopsBefore + 1, "Load .ies did not NOOP");
+            if (!PhotometricIesFileDialogAvailable())
+            {
+                Click("TopBar/Load");
+                Confirm(State.NoopCount == NoopsBefore && State.LoadedIesProfiles.empty(),
+                        "Opening the Type-C import UI changed data or raised a NOOP");
+                if (ArgumentCount >= 4)
+                {
+                    std::snprintf(State.LoadIesPath, sizeof(State.LoadIesPath), "%s", Arguments[3]);
+                    Frame();
+                    Click("LoadIes/Import");
+                    Confirm(State.LoadedIesProfiles.size() == 1 && State.Lights[2].Props.CustomIesProfile == 0 &&
+                                State.Lights[2].Props.UseMeasuredIes && State.LoadIesError.empty(),
+                            "The native path modal did not import and assign the selected Type-C profile");
+                    const double ModalLux = QueryPhotometricWallLux(State.Lights, 8, State.LoadedIesProfiles.data(),
+                                                                    static_cast<int>(State.LoadedIesProfiles.size()));
+                    Confirm(ModalLux > 0.0, "The path-modal imported profile produced no wall-lux estimate");
+                }
+                else Click("LoadIes/Cancel");
+            }
             Click("TopBar/ExportIes");
-            Confirm(State.NoopCount == NoopsBefore + 2, "Export .ies did not NOOP");
+            Confirm(State.NoopCount == NoopsBefore + 1, "Export .ies did not NOOP");
             Click("TopBar/ExportRig");
-            Confirm(State.NoopCount == NoopsBefore + 3, "Export rig did not NOOP");
+            Confirm(State.NoopCount == NoopsBefore + 2, "Export rig did not NOOP");
             Click("TopBar/Suite0");
-            Confirm(State.NoopCount == NoopsBefore + 4, "The suite link did not NOOP");
+            Confirm(State.NoopCount == NoopsBefore + 3, "The suite link did not NOOP");
             Confirm(State.Log.front().Channel == "SCENE", "The suite refusal missed its SCENE channel");
         }
         Click("TopBar/Goniometer");

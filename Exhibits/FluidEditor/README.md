@@ -65,6 +65,20 @@ is Vite on `0.0.0.0:5173`.
 
 ![Fluid Editor WebGL2 workspace capture](./Images/Verification-2026-11-09/VerifiedWorkspace.png)
 
+## Multi-view render proofs — 2026-11-09
+
+Four images crop the actual Fluid viewport in perspective, front, side, and top camera presets; the fifth is the full 1920×1080 editor window. All four crops use the same settled lightweight-plume preset (`low_gpu_performance`): 24³ grid, 54 solver steps, 1.504 s simulated time, then paused for consistent angles. They were captured from the browser editor's WebGL2 renderer on SwiftShader; readback reported no GL error or lost context.
+
+| Region | Evidence |
+|---|---|
+| Perspective viewport | [`01-PerspectiveViewport.png`](./Images/RenderProofs-2026-11-09/01-PerspectiveViewport.png) |
+| Front viewport | [`02-FrontViewport.png`](./Images/RenderProofs-2026-11-09/02-FrontViewport.png) |
+| Side viewport | [`03-SideViewport.png`](./Images/RenderProofs-2026-11-09/03-SideViewport.png) |
+| Top viewport | [`04-TopViewport.png`](./Images/RenderProofs-2026-11-09/04-TopViewport.png) |
+| Full workspace window | [`05-WorkspaceWindow.png`](./Images/RenderProofs-2026-11-09/05-WorkspaceWindow.png) |
+
+These are browser-prototype render proofs, not evidence that the separate native C++ Fluid UI launches or controls `FluidSimulationSequence`; that integration remains out of scope here.
+
 ## Native C++ GPU simulation (2026-11-09)
 
 A separate native Fluid execution path now lives in `Frontier/Engine/Rendering/FluidSimulation/` and uses Slang compute shaders
