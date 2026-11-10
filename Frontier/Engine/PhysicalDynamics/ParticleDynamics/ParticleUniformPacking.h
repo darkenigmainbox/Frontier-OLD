@@ -101,6 +101,15 @@ struct ParticleOrbitCamera
     std::array<double, 3> Target   = { 0.0, 1.6, 0.0 };
 };
 
+// 📝 A pinhole camera pose in the particle world (Y up). Convert the Everest scene camera from Z-up before resolving it.
+struct ParticleCameraPose
+{
+    std::array<double, 3> Position{};
+    std::array<double, 3> Target{1.0, 0.0, 0.0};
+    std::array<double, 3> Up{0.0, 1.0, 0.0};
+    double                VerticalFieldOfView = 0.7853981633974483;   // [rad]
+};
+
 struct ParticleCameraReading
 {
     std::array<float, 16> ViewProjection{};   // column-major, depth 0..1
@@ -109,6 +118,10 @@ struct ParticleCameraReading
     std::array<double, 3> Up{};
 };
 
+// 📝 The Everest scene is Z-up; the particle world is Y-up. This right-handed axis rotation maps scene (x, y, z) to particle
+//    (x, z, −y), preserving world-space camera alignment without changing particle positions.
+[[nodiscard]] ParticleCameraPose ConvertSceneCameraToParticleAxes(const ParticleCameraPose& SceneCamera) noexcept;
+[[nodiscard]] ParticleCameraReading ResolveParticleCamera(const ParticleCameraPose& Camera, double Aspect) noexcept;
 [[nodiscard]] ParticleCameraReading ResolveParticleCamera(const ParticleOrbitCamera& Camera, double Aspect) noexcept;
 
 struct ParticleRefreshReadings
@@ -143,6 +156,7 @@ struct ParticleLensingReading
 
 // 📝 Black-hole lensing and heat shimmer in screen space: up to two of each, in effect order.
 ParticleLensingReading PackParticleLensing(ParticleLensingBlock& Out, std::span<const ParticleEffectPlacement> Effects,
-                                           const ParticleCameraReading& Camera, double Aspect, double TimeSeconds) noexcept;
+                                           const ParticleCameraReading& Camera, double Aspect, double TimeSeconds,
+                                           double VerticalFieldOfView = 0.7853981633974483) noexcept;
 
 } // namespace Frontier

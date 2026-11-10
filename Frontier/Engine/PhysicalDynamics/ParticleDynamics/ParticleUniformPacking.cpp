@@ -301,18 +301,21 @@ std::vector<float> SampleLightFibrePath(std::string_view Shape, double SizeMetre
 //                                                    CAMERA AND SCENE
 //------------------------------------------------------------------------------------------------------------------------
 
-ParticleCameraReading ResolveParticleCamera(const ParticleOrbitCamera& Camera, double Aspect) noexcept
+ParticleCameraPose ConvertSceneCameraToParticleAxes(const ParticleCameraPose& SceneCamera) noexcept
 {
-    const double Cosine = std::cos(Camera.Pitch);
-    const double Sine   = std::sin(Camera.Pitch);
-    const Triple Eye    = { Camera.Target[0] + Camera.Distance * Cosine * std::sin(Camera.Yaw), Camera.Target[1] + Camera.Distance * Sine,
-                            Camera.Target[2] + Camera.Distance * Cosine * std::cos(Camera.Yaw) };
+    const auto ConvertAxes = [](const Triple& SceneVector) -> Triple { return { SceneVector[0], SceneVector[2], -SceneVector[1] }; };
+    return { ConvertAxes(SceneCamera.Position), ConvertAxes(SceneCamera.Target), ConvertAxes(SceneCamera.Up), SceneCamera.VerticalFieldOfView };
+}
 
-    // 📝 ConstructLookAt and ConstructPerspective return Float32Arrays: their entries are floats before the product.
-    const Triple Up      = { 0.0, 1.0, 0.0 };
+ParticleCameraReading ResolveParticleCamera(const ParticleCameraPose& Camera, double Aspect) noexcept
+{
+    const Triple Eye     = Camera.Position;
+    const Triple Up      = Camera.Up;
     const Triple Forward = Normalize(Subtract(Camera.Target, Eye));
     const Triple Side    = Normalize(Cross(Forward, Up));
     const Triple Upward  = Cross(Side, Forward);
+
+    // 📝 ConstructLookAt and ConstructPerspective return Float32Arrays: their entries are floats before the product.
     const std::array<float, 16> View = {
         static_cast<float>(Side[0]), static_cast<float>(Upward[0]), static_cast<float>(-Forward[0]), 0.0f,
         static_cast<float>(Side[1]), static_cast<float>(Upward[1]), static_cast<float>(-Forward[1]), 0.0f,
@@ -321,7 +324,7 @@ ParticleCameraReading ResolveParticleCamera(const ParticleOrbitCamera& Camera, d
     };
     const double Near   = 0.05;
     const double Far    = 400.0;
-    const double Focal  = 1.0 / std::tan(DegreesToRadians(45.0) * 0.5);
+    const double Focal  = 1.0 / std::tan(Camera.VerticalFieldOfView * 0.5);
     const std::array<float, 16> Projection = {
         static_cast<float>(Focal / Aspect), 0.0f, 0.0f, 0.0f,
         0.0f, static_cast<float>(Focal), 0.0f, 0.0f,
@@ -348,6 +351,15 @@ ParticleCameraReading ResolveParticleCamera(const ParticleOrbitCamera& Camera, d
     return Reading;
 }
 
+ParticleCameraReading ResolveParticleCamera(const ParticleOrbitCamera& Camera, double Aspect) noexcept
+{
+    const double Cosine = std::cos(Camera.Pitch);
+    const double Sine   = std::sin(Camera.Pitch);
+    const Triple Eye    = { Camera.Target[0] + Camera.Distance * Cosine * std::sin(Camera.Yaw), Camera.Target[1] + Camera.Distance * Sine,
+                            Camera.Target[2] + Camera.Distance * Cosine * std::cos(Camera.Yaw) };
+    const ParticleCameraPose Pose{ Eye, Camera.Target, { 0.0, 1.0, 0.0 }, DegreesToRadians(45.0) };
+    return ResolveParticleCamera(Pose, Aspect);
+}
 void PackParticleRefreshConstants(ParticleRefreshConstants& Out, const ParticleCameraReading& Camera, const ParticleWindSettings& Wind,
                                   const ParticleRefreshReadings& Readings) noexcept
 {
@@ -427,12 +439,13 @@ void PackParticleAccelerationFields(ParticleAccelerationBlock& Out, std::span<co
 }
 
 ParticleLensingReading PackParticleLensing(ParticleLensingBlock& Out, std::span<const ParticleEffectPlacement> Effects,
-                                           const ParticleCameraReading& Camera, double Aspect, double TimeSeconds) noexcept
+                                           const ParticleCameraReading& Camera, double Aspect, double TimeSeconds,
+                                           double VerticalFieldOfView) noexcept
 {
     Out.fill(0.0f);
     ParticleLensingReading Reading;
     const std::array<float, 16>& M     = Camera.ViewProjection;
-    const double                 Scale = 0.5 / std::tan(std::numbers::pi / 8.0);
+    const double                 Scale = 0.5 / std::tan(VerticalFieldOfView * 0.5);
     struct ScreenPoint
     {
         double U = 0.0;

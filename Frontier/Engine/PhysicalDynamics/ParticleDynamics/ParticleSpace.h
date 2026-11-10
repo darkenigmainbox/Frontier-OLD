@@ -99,6 +99,7 @@ struct ParticleRefreshPlan
     ParticleLensingBlock                   Lensing{};
     ParticleLensingReading                 LensingCounts;
     std::array<float, 3>                   Clear = { 0.035f, 0.037f, 0.045f };
+    bool                                   TransparentBackground = false;   // clear to zero alpha for scene compositing; off in the Particle editor
     bool                                   Floor  = true;
     bool                                   Arrows = false;
     std::vector<float>                     Guides;          // 7 floats per vertex: position, rgba
@@ -155,8 +156,10 @@ public:
     // 📝 A strike now; its ground point bursts any Strike sparks effect.
     std::array<double, 3> StrikeNow();
 
-    // 📝 Advances the clock by one interface tick (clamped to 50 ms as the prototype does) and packs the refresh.
-    ParticleRefreshPlan Advance(double RealDeltaSeconds, uint32_t ViewWidth, uint32_t ViewHeight);
+    // 📝 Advances the clock by one interface tick (clamped to 50 ms as the prototype does) and packs the refresh. A host scene
+    //    may override the editor's orbit camera with its live pose and field of view.
+    ParticleRefreshPlan Advance(double RealDeltaSeconds, uint32_t ViewWidth, uint32_t ViewHeight,
+                                 const ParticleCameraPose* CameraOverride = nullptr);
 
     // 📝 The domain box, each visible effect's origin cross (amber when selected), molecular boxes and the probe.
     [[nodiscard]] std::vector<float> ConstructGuides() const;

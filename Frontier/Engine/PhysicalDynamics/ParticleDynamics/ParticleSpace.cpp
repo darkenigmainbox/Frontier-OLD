@@ -318,7 +318,8 @@ std::array<uint32_t, 3> ParticleSpace::ResolveProbeCell() const noexcept
 //                                                    REFRESH
 //------------------------------------------------------------------------------------------------------------------------
 
-ParticleRefreshPlan ParticleSpace::Advance(double RealDeltaSeconds, uint32_t ViewWidth, uint32_t ViewHeight)
+ParticleRefreshPlan ParticleSpace::Advance(double RealDeltaSeconds, uint32_t ViewWidth, uint32_t ViewHeight,
+                                           const ParticleCameraPose* CameraOverride)
 {
     ParticleRefreshPlan Plan;
     Plan.ViewWidth  = std::max(1u, ViewWidth);
@@ -354,7 +355,8 @@ ParticleRefreshPlan ParticleSpace::Advance(double RealDeltaSeconds, uint32_t Vie
     }
 
     const double Aspect = static_cast<double>(Plan.ViewWidth) / static_cast<double>(std::max(1u, Plan.ViewHeight));
-    Plan.Camera         = ResolveParticleCamera(Camera, Aspect);
+    const double VerticalFieldOfView = CameraOverride != nullptr ? CameraOverride->VerticalFieldOfView : std::numbers::pi / 4.0;
+    Plan.Camera = CameraOverride != nullptr ? ResolveParticleCamera(*CameraOverride, Aspect) : ResolveParticleCamera(Camera, Aspect);
     std::vector<ParticleField> Flowing(Fields.begin(), Fields.end());
     if (LevelWind.Follow && LevelWind.FlowMps && CountFlowFields() < ParticleWindComponentLimit)
     {
@@ -410,7 +412,7 @@ ParticleRefreshPlan ParticleSpace::Advance(double RealDeltaSeconds, uint32_t Vie
             }
             LightFibreRefresh FibreRefresh;
             FibreRefresh.LoopFraction    = std::fmod(TimeSeconds / Fibre.LoopSeconds, 1.0);
-            FibreRefresh.ProjectionScale = (0.5 * Plan.ViewHeight) / std::tan(std::numbers::pi / 8.0);
+            FibreRefresh.ProjectionScale = (0.5 * Plan.ViewHeight) / std::tan(VerticalFieldOfView * 0.5);
             FibreRefresh.ViewWidth       = Plan.ViewWidth;
             FibreRefresh.ViewHeight      = Plan.ViewHeight;
             PackLightFibreUniform(Job.FibreUniform, P, FibreRefresh);
@@ -519,7 +521,7 @@ ParticleRefreshPlan ParticleSpace::Advance(double RealDeltaSeconds, uint32_t Vie
     {
         Placements.push_back({ &Effect.Parameters });
     }
-    Plan.LensingCounts = PackParticleLensing(Plan.Lensing, Placements, Plan.Camera, Aspect, TimeSeconds);
+    Plan.LensingCounts = PackParticleLensing(Plan.Lensing, Placements, Plan.Camera, Aspect, TimeSeconds, VerticalFieldOfView);
     PackParticleAccelerationFields(Plan.Fields, Placements, ResolveParticleFieldPayloads(Fields, TimeSeconds).Accelerations, TimeSeconds);
     const float Flash = static_cast<float>(Lightning.Flash * 0.22);
     Plan.Clear  = { 0.035f + Flash, 0.037f + Flash, 0.045f + Flash };

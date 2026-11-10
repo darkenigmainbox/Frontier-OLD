@@ -25,6 +25,9 @@
 #include "Engine/Interface/SceneInspectorPanel.h"
 #include "Engine/Interface/ViewportChromeControls.h"
 #include "Engine/PhysicalDynamics/ForceSourceCatalogue.h"
+#include "Engine/PhysicalDynamics/ParticleDynamics/ParticleEffectLibrary.h"
+#include "Engine/PhysicalDynamics/ParticleDynamics/ParticleSpace.h"
+#include "Engine/PhysicalDynamics/ParticleDynamics/ParticleSpaceCodec.h"
 #include "Engine/Scene/SceneDirectory.h"
 #include "Frontier/Engine/Geometry/ShapeArchive.h"
 #include <imgui.h>
@@ -49,6 +52,25 @@ uint32_t EnsureProjectLogCategory(std::string_view CategoryName)
 {
     return Frontier::LogCategories().Register(CategoryName, Frontier::LogColour::Mint, true);
 }
+
+#if FRONTIER_EDITOR && defined(FRONTIER_WITH_INTERFACE_SDK)
+std::filesystem::path ResolveParticleLibraryFile(const std::filesystem::path& ProjectRootPath)
+{
+    const std::filesystem::path Relative = std::filesystem::path("ParticleArchives") / "ParticleLibrary.particlespace";
+    std::vector<std::filesystem::path> Candidates;
+    Candidates.push_back(ProjectRootPath / "Content" / Relative);
+    const std::filesystem::path EngineRoot = Frontier::QueryEngineContentDirectory();
+    if (!EngineRoot.empty()) Candidates.push_back(EngineRoot / Relative);
+    Candidates.push_back(ProjectRootPath.parent_path().parent_path() / "EngineContent" / Relative);
+    Candidates.push_back(std::filesystem::current_path() / "EngineContent" / Relative);
+    for (const std::filesystem::path& Candidate : Candidates)
+    {
+        std::error_code Failure;
+        if (std::filesystem::is_regular_file(Candidate, Failure)) return Candidate;
+    }
+    return {};
+}
+#endif
 
 } // namespace
 
@@ -337,7 +359,7 @@ EverestWorkspace::EverestWorkspace(Frontier::ControlCentrePanel& ControlCentre,
     // 📝 The scene's entries plus the one Render settings component (the whole renderer, owner's request) and the scene archive's
     //    geometry objects; neither the renderer nor the geometry is constructible (the archive decides what geometry exists).
     const std::vector<std::string> SceneTypes = {"RenderPipeline","Solar","OpticalFlare","Atmosphere","Clouds","Fog","Stars","Moons","Planet","ForceField","Wind",
-                                                 "ForceSource","Geometry"};
+                                                 "ForceSource","Geometry","Particles"};
     OutlinerPanel.ConfigureVisibleTypes(SceneTypes);
     auto Types = QueryWorldSpace().EnumerateRegisteredTypes();
     std::erase_if(Types,[&](const auto& Entry)
@@ -1120,6 +1142,136 @@ void EverestWorkspace::ReleasePointerConstraint()
     ConstrainedWindow = nullptr;
 }
 
+void EverestWorkspace::PresentSceneParticles(const SceneViewportRequest& Request, SceneViewportImage& Image)
+{
+    if (!PresentParticleViewport || Image.Texture == 0) return;
+    auto* ParticleRecord = dynamic_cast<Frontier::ParticleRecord*>(QueryWorldSpace().FindFirstByType("Particles"));
+    if (ParticleRecord == nullptr || !ParticleRecord->AccessConfiguration().Enabled) return;
+    if (Image.Readout.Held)
+    {
+        Image.ParticleTexture = LastSceneParticleTexture;
+        return;
+    }
+
+    if (!SceneParticleLibraryAttempted)
+    {
+        SceneParticleLibraryAttempted = true;
+        const std::filesystem::path LibraryFile = ResolveParticleLibraryFile(ProjectRoot);
+        if (LibraryFile.empty())
+        {
+            SceneParticleDiagnostic = "ParticleLibrary.particlespace was not found in project or engine content.";
+        }
+        else
+        {
+            auto Library = std::make_unique<Frontier::ParticleEffectLibrary>();
+            if (Library->Decode(LibraryFile, SceneParticleDiagnostic))
+            {
+                SceneParticleLibrary = std::move(Library);
+                SceneParticleDiagnostic.clear();
+            }
+            else
+            {
+                SceneParticleDiagnostic = "Particle library failed: " + SceneParticleDiagnostic;
+            }
+        }
+    }
+    if (!SceneParticleLibrary)
+    {
+        if (!SceneParticleDiagnostic.empty()) Image.Status += "  |  " + SceneParticleDiagnostic;
+        return;
+    }
+
+    const Frontier::ParticleConfiguration& Configuration = ParticleRecord->QueryConfiguration();
+    std::filesystem::path ParticleFile;
+    if (!ActiveLevelPath.empty() && !Configuration.SpaceFile.empty())
+    {
+        ParticleFile = ActiveLevelPath.parent_path() / Frontier::DecodeUtf8Path(Configuration.SpaceFile);
+    }
+    std::error_code FileFailure;
+    const bool FilePresent = !ParticleFile.empty() && std::filesystem::is_regular_file(ParticleFile, FileFailure);
+    const std::filesystem::file_time_type WriteTime = FilePresent ? std::filesystem::last_write_time(ParticleFile, FileFailure)
+                                                                 : std::filesystem::file_time_type{};
+    const bool FileChanged = FilePresent && (!SceneParticleFilePresent || WriteTime != SceneParticleWriteTime);
+    const bool Reload = !SceneParticleLoaded || ParticleFile != SceneParticleFile || FileChanged || (!FilePresent && SceneParticleFilePresent);
+    if (Reload)
+    {
+        SceneParticleFile = ParticleFile;
+        if (FilePresent)
+        {
+            auto LoadedSpace = std::make_unique<Frontier::ParticleSpace>();
+            if (Frontier::ReadParticleSpace(ParticleFile, *LoadedSpace, SceneParticleDiagnostic))
+            {
+                SceneParticleSpace = std::move(LoadedSpace);
+                SceneParticleDiagnostic.clear();
+            }
+            else
+            {
+                SceneParticleDiagnostic = "Particle space failed: " + SceneParticleDiagnostic;
+                if (!SceneParticleSpace)
+                {
+                    SceneParticleSpace = std::make_unique<Frontier::ParticleSpace>();
+                    SceneParticleSpace->ConstructDefault(*SceneParticleLibrary);
+                }
+            }
+            SceneParticleFilePresent = true;
+            SceneParticleWriteTime   = WriteTime;
+        }
+        else
+        {
+            SceneParticleSpace = std::make_unique<Frontier::ParticleSpace>();
+            SceneParticleSpace->ConstructDefault(*SceneParticleLibrary);
+            SceneParticleFilePresent = false;
+            SceneParticleWriteTime   = {};
+            SceneParticleDiagnostic.clear();
+        }
+        SceneParticleLoaded = true;
+    }
+    if (!SceneParticleSpace) return;
+    if (!SceneParticleDiagnostic.empty()) Image.Status += "  |  " + SceneParticleDiagnostic;
+
+    SceneParticleSpace->LevelWind.FlowMps.reset();
+    if (SceneParticleSpace->LevelWind.Follow)
+    {
+        if (const auto Flow = SampleLevelFlow(SceneParticleSpace->LevelWind.AnchorMetres))
+        {
+            SceneParticleSpace->LevelWind.FlowMps = std::array<double, 3>{(*Flow)[0], (*Flow)[2], -(*Flow)[1]};
+        }
+    }
+
+    std::array<uint32_t, 2> Extent = Image.Extent;
+    if (Extent[0] == 0 || Extent[1] == 0)
+    {
+        Extent = {static_cast<uint32_t>(std::max(1.0, std::round(static_cast<double>(Request.PanelWidth) * Request.PixelDensity))),
+                  static_cast<uint32_t>(std::max(1.0, std::round(static_cast<double>(Request.PanelHeight) * Request.PixelDensity)))};
+    }
+    const Frontier::ParticleCameraPose SceneCamera{Request.CameraPosition, Request.CameraTarget, Request.CameraUp, Request.VerticalFieldOfView};
+    const Frontier::ParticleCameraPose ParticleCamera = Frontier::ConvertSceneCameraToParticleAxes(SceneCamera);
+    Frontier::ParticleRefreshPlan Plan = SceneParticleSpace->Advance(Request.DeltaSeconds, Extent[0], Extent[1], &ParticleCamera);
+    Plan.TransparentBackground = true;
+    Plan.Lensing[31]            = 1.0f;   // 📝 LensingRasterization returns straight-alpha texels for the interface image path.
+    Plan.Floor                  = false;
+    Plan.Arrows                 = false;
+    Plan.Guides.clear();
+
+    Frontier::ParticleViewportRequest ParticleRequest;
+    ParticleRequest.Plan    = &Plan;
+    ParticleRequest.Effects = &SceneParticleSpace->Effects;
+    try
+    {
+        const Frontier::ParticleViewportImage ParticleImage = PresentParticleViewport(ParticleRequest);
+        Image.ParticleTexture      = ParticleImage.Texture;
+        LastSceneParticleTexture   = ParticleImage.Texture;
+        if (ParticleImage.Texture == 0 && !ParticleImage.Failure.empty())
+        {
+            Image.Status += "  |  " + ParticleImage.Failure;
+        }
+    }
+    catch (const std::exception& Failure)
+    {
+        Image.Status += std::string("  |  Particle viewport failed: ") + Failure.what();
+    }
+}
+
 void EverestWorkspace::ConstructViewportSurface()
 {
     // 📝 The demo's viewport column (index.html #viewport-column): the viewport bar above the stage; on the stage the
@@ -1204,6 +1356,7 @@ void EverestWorkspace::ConstructViewportSurface()
         Request.PickSerial          = PickSerial;
         Request.PickPoint           = PickPoint;
         Image       = PresentSceneViewport(Request);
+        PresentSceneParticles(Request, Image);
         LastReadout = Image.Readout;
         // 📝 GPU picking answers a click one interface tick later, from the image the click was made on; a click on the sky or on
         //    nothing a record owns leaves the selection as it is.
@@ -1228,6 +1381,10 @@ void EverestWorkspace::ConstructViewportSurface()
     if (Image.Texture != 0)
     {
         DrawList->AddImage(static_cast<ImTextureID>(Image.Texture), StageMin, Max);
+        if (Image.ParticleTexture != 0)
+        {
+            DrawList->AddImage(static_cast<ImTextureID>(Image.ParticleTexture), StageMin, Max);
+        }
         const auto* FieldRecord = dynamic_cast<const Frontier::ForceFieldRecord*>(QueryWorldSpace().FindFirstByType("ForceField"));
         if (FieldRecord && FieldRecord->QueryConfiguration().Visualize && !Overlays.Fullscreen && LastReadout.Environment)
         {

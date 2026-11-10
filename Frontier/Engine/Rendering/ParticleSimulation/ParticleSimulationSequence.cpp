@@ -432,7 +432,9 @@ bool ParticleSimulationSequence::Refresh(const ParticleRefreshPlan& Plan, std::s
     }
 
     // ⑤ the raster (eos render pass order: floor, guides, arrows, fibres, particles, lightning)
-    const ColorAttachment Clear{ ColourView_, LoadOperation::Clear, { Plan.Clear[0], Plan.Clear[1], Plan.Clear[2], 1.0f } };
+    const ColorAttachment Clear{ ColourView_, LoadOperation::Clear,
+                                 Plan.TransparentBackground ? std::array<float, 4>{0.0f, 0.0f, 0.0f, 0.0f}
+                                                           : std::array<float, 4>{Plan.Clear[0], Plan.Clear[1], Plan.Clear[2], 1.0f} };
     const DepthAttachment Depth{ DepthView_, LoadOperation::Clear, 1.0f };
     Sequence.BeginRaster(std::span<const ColorAttachment>(&Clear, 1), &Depth, "Particle raster");
     const auto Bind = [&](const std::shared_ptr<DeviceProgram>& Program, const std::shared_ptr<DescriptorGroup>& Group)
@@ -504,7 +506,8 @@ bool ParticleSimulationSequence::Refresh(const ParticleRefreshPlan& Plan, std::s
     Sequence.EndRaster();
 
     // ⑥ lensing into the presented image
-    const ColorAttachment Presented{ LensedView_, LoadOperation::Clear, { 0.0f, 0.0f, 0.0f, 1.0f } };
+    const ColorAttachment Presented{ LensedView_, LoadOperation::Clear,
+                                      { 0.0f, 0.0f, 0.0f, Plan.TransparentBackground ? 0.0f : 1.0f } };
     Sequence.BeginRaster(std::span<const ColorAttachment>(&Presented, 1), nullptr, "Particle lensing");
     Sequence.BindProgram(LensingProgram_);
     Sequence.BindGroup(0, LensingGroup_);

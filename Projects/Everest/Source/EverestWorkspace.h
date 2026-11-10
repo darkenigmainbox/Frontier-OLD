@@ -19,10 +19,13 @@ struct ImVec2;
 #include "Engine/Interface/PanelDockspace.h"
 #include "Engine/Interface/SceneDirectoryPanel.h"
 #include "Engine/Interface/SceneInspectorPanel.h"
+#include "Engine/Interface/ParticleEditor/ParticleViewportPresentation.h"
 #include "UI/Editor/ControlCentrePanel.h"
 namespace Frontier
 {
 class ForceFieldVisualization;
+class ParticleEffectLibrary;
+class ParticleSpace;
 class PhysicsExtension;
 }
 #endif
@@ -149,6 +152,8 @@ class EverestWorkspace
     std::function<void()> EvaluateReturnToBrowser;
     // 📝 Set by the host application when it can render the scene; the viewport falls back to its schematic without it.
     std::function<SceneViewportImage(const SceneViewportRequest&)> PresentSceneViewport;
+    // 📝 The main viewport's particle layer; the workspace supplies its scene-aligned plan and the host presents its transparent image.
+    std::function<Frontier::ParticleViewportImage(const Frontier::ParticleViewportRequest&)> PresentParticleViewport;
     // 📝 Set by the host application: hides the pointer and locks it to the platform window (an ImGuiViewport's
     //    PlatformHandle) while a camera drag lasts, so the view turns without the pointer meeting the screen edge; the
     //    pointer returns where the drag began. Without it the pointer stays visible and free.
@@ -210,6 +215,7 @@ class EverestWorkspace
     [[nodiscard]] Frontier::GeometryConfiguration* ResolveEditedGeometry();
     [[nodiscard]] Frontier::PlacementView ResolvePlacementView(const ImVec2& StageMin, const ImVec2& StageExtent) const;
     void ConstructViewportSurface();
+    void PresentSceneParticles(const SceneViewportRequest& Request, SceneViewportImage& Image);
     void ConstructViewportSchematic(ImDrawList* DrawList, const ImVec2& Min, const ImVec2& Max);
     void IntegrateViewportCamera(bool Hovered, bool Active, double DeltaSeconds, bool LeftClaimed = false);
     void ReleasePointerConstraint();
@@ -271,7 +277,16 @@ class EverestWorkspace
     bool                          GizmoPress             = false;     // [-] that press began on a handle
     std::unordered_map<uint64_t, std::array<float, 3>> PendingAlbedo{};   // [-] constructed shapes waiting for their family
     FieldViewport                 Field{};
-    std::unique_ptr<Frontier::PhysicsExtension> Physics;
+    std::unique_ptr<Frontier::ParticleEffectLibrary> SceneParticleLibrary;
+    std::unique_ptr<Frontier::ParticleSpace>         SceneParticleSpace;
+    std::filesystem::path                          SceneParticleFile;
+    std::filesystem::file_time_type                SceneParticleWriteTime{};
+    uint64_t                                       LastSceneParticleTexture = 0;
+    std::string                                    SceneParticleDiagnostic;
+    bool                                           SceneParticleLibraryAttempted = false;
+    bool                                           SceneParticleLoaded = false;
+    bool                                           SceneParticleFilePresent = false;
+    std::unique_ptr<Frontier::PhysicsExtension>    Physics;
 #endif
 
     std::filesystem::path ProjectRoot;

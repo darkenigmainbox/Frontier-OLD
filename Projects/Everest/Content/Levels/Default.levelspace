@@ -1793,3 +1793,11 @@ position_m = [-36.0, 8.5, 0.0]
 orientation_deg = [0.0, 0.0, 0.0]
 scale = [1.0, 1.0, 1.0]
 fracture = false
+
+[[records]]
+identity = "rec_particles"
+type = "Particles"
+name = "Particle Effects"
+[records.configuration]
+enabled = true
+space_file = "Default.Particle_Effects.particlespace"

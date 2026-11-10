@@ -1,20 +1,22 @@
 /*==========================================================================================================================================
                                                         PARTICLESPACEVALIDATION.CPP
 ==========================================================================================================================================*/
-// 🧩 The `.particlespace` file: a space holding every one of the library's 52 presets, edited settings, forces and an override
-//    origin is written, read and written again; the two texts must be identical, every number must survive bit for bit, the
-//    read space must plan the same GPU refreshes as the original, the level's Force Field must join the lattice only while
-//    followed, the drag volume and the current must reach the field program, and malformed files must be refused without
-//    touching the space they were read into.
+// 🧩 The default Everest sidecar and the ParticleSpace: its opening presets match the library; a space holding every preset,
+//    edited settings, forces and an override origin is written, read and written again; every number and GPU refresh survives;
+//    the live scene camera stays aligned across the Z-up/Y-up axis conversion and its FOV drives screen-space effects; level
+//    wind and box volumes reach the field program; malformed files are refused without touching the space they were read into.
 //
 //     ParticleSpaceValidation <repository root> <scratch folder>
 
 #include "Frontier/Engine/PhysicalDynamics/ParticleDynamics/ParticleSpaceCodec.h"
 
+#include <algorithm>
 #include <bit>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <numbers>
 #include <string>
 
 using namespace Frontier;
@@ -93,7 +95,101 @@ int main(int ArgumentCount, char** Arguments)
         return 1;
     }
 
-    // ① a space with every preset, edited settings, a disabled force and an override origin
+    // ⓪ The default Everest Particles record points at a valid sidecar with the library's four opening presets.
+    {
+        ParticleSpace Expected;
+        Expected.ConstructDefault(Library);
+        ParticleSpace FromLevel;
+        const std::filesystem::path File = Root / "Projects" / "Everest" / "Content" / "Levels" / "Default.Particle_Effects.particlespace";
+        std::string Diagnostic;
+        const bool Read = ReadParticleSpace(File, FromLevel, Diagnostic);
+        Expect(Read, "read default Everest particle sidecar (" + Diagnostic + ")");
+        bool PresetsMatch = Read && FromLevel.Effects.size() == Expected.Effects.size() && FromLevel.Fields.size() == Expected.Fields.size();
+        for (size_t Index = 0; PresetsMatch && Index < Expected.Effects.size(); ++Index)
+        {
+            const ParticleEffectInstance& A = FromLevel.Effects[Index];
+            const ParticleEffectInstance& B = Expected.Effects[Index];
+            PresetsMatch = A.PresetIdentifier == B.PresetIdentifier && A.Name == B.Name && A.Number == B.Number &&
+                           SameParameters(A.Parameters, B.Parameters);
+        }
+        Expect(PresetsMatch, "default sidecar matches the library's effects, parameters, and force count");
+    }
+
+    // ① The live Everest camera keeps its pixel projection when the Z-up scene pose is rotated into the particle Y-up axes.
+    {
+        constexpr double Pi = 3.14159265358979323846;
+        const ParticleCameraPose SceneCamera{{-61.9997, -34.0018, 9.0052}, {-10.0, 6.0, 3.0}, {0.0, 0.0, 1.0}, Pi / 3.0};
+        const ParticleCameraPose ParticleCamera = ConvertSceneCameraToParticleAxes(SceneCamera);
+        const ParticleCameraReading CameraReading = ResolveParticleCamera(ParticleCamera, 16.0 / 9.0);
+        Expect(Same(ParticleCamera.Position, std::array<double, 3>{-61.9997, 9.0052, 34.0018}) &&
+                   Same(ParticleCamera.Target, std::array<double, 3>{-10.0, 3.0, -6.0}) &&
+                   ParticleCamera.Up[0] == 0.0 && ParticleCamera.Up[1] == 1.0 && ParticleCamera.Up[2] == 0.0,
+               "the scene camera pose maps into right-handed Y-up particle axes");
+
+        const auto Dot = [](const std::array<double, 3>& Left, const std::array<double, 3>& Right) {
+            return Left[0] * Right[0] + Left[1] * Right[1] + Left[2] * Right[2];
+        };
+        const auto Subtract = [](const std::array<double, 3>& Left, const std::array<double, 3>& Right) {
+            return std::array<double, 3>{Left[0] - Right[0], Left[1] - Right[1], Left[2] - Right[2]};
+        };
+        const auto Cross = [](const std::array<double, 3>& Left, const std::array<double, 3>& Right) {
+            return std::array<double, 3>{Left[1] * Right[2] - Left[2] * Right[1], Left[2] * Right[0] - Left[0] * Right[2],
+                                         Left[0] * Right[1] - Left[1] * Right[0]};
+        };
+        const auto Normalize = [](std::array<double, 3> Axis) {
+            const double Length = std::hypot(Axis[0], Axis[1], Axis[2]);
+            for (double& Component : Axis) Component /= Length;
+            return Axis;
+        };
+        const std::array<double, 3> SceneForward = Normalize(Subtract(SceneCamera.Target, SceneCamera.Position));
+        const std::array<double, 3> SceneRight   = Normalize(Cross(SceneForward, SceneCamera.Up));
+        const std::array<double, 3> SceneUp      = Cross(SceneRight, SceneForward);
+        std::array<double, 3>       Point         = SceneCamera.Target;
+        for (size_t Axis = 0; Axis < 3; ++Axis) Point[Axis] += SceneRight[Axis] * 2.0 + SceneUp[Axis];
+        const std::array<double, 3> ParticlePoint{Point[0], Point[2], -Point[1]};
+        std::array<double, 4>       Clip{};
+        for (int Row = 0; Row < 4; ++Row)
+        {
+            Clip[Row] = CameraReading.ViewProjection[Row] * ParticlePoint[0] + CameraReading.ViewProjection[4 + Row] * ParticlePoint[1] +
+                        CameraReading.ViewProjection[8 + Row] * ParticlePoint[2] + CameraReading.ViewProjection[12 + Row];
+        }
+        const double Depth = Dot(Subtract(SceneCamera.Target, SceneCamera.Position), SceneForward);
+        const double Focal = 1.0 / std::tan(SceneCamera.VerticalFieldOfView * 0.5);
+        const double ExpectedX = 2.0 * Focal / (Depth * (16.0 / 9.0));
+        const double ExpectedY = Focal / Depth;
+        Expect(std::fabs(Clip[0] / Clip[3] - ExpectedX) < 1.0e-5 && std::fabs(Clip[1] / Clip[3] - ExpectedY) < 1.0e-5,
+               "scene and particle camera project the same off-centre world point");
+
+        ParticleSpace CameraSpace;
+        CameraSpace.ConstructDefault(Library);
+        const ParticleRefreshPlan Plan = CameraSpace.Advance(1.0 / 60.0, 1280, 720, &ParticleCamera);
+        Expect(Same(Plan.Camera.Eye, ParticleCamera.Position), "refresh plan uses the live scene camera eye");
+        Expect(!Plan.TransparentBackground, "regular Particle editor plans retain their opaque background");
+
+        ParticleEffectParameters LensParameters;
+        LensParameters.OriginMetres = ParticleCamera.Target;
+        LensParameters.Lensing = ParticleLensing{1.0, 0.5};
+        const std::array<ParticleEffectPlacement, 1> LensPlacement = {{{&LensParameters}}};
+        ParticleLensingBlock LensSixty{}, LensFortyFive{};
+        (void)PackParticleLensing(LensSixty, LensPlacement, CameraReading, 16.0 / 9.0, 0.0, Pi / 3.0);
+        (void)PackParticleLensing(LensFortyFive, LensPlacement, CameraReading, 16.0 / 9.0, 0.0, Pi / 4.0);
+        const double FocalSixty = 1.0 / std::tan(Pi / 6.0);
+        const double FocalFortyFive = 1.0 / std::tan(Pi / 8.0);
+        Expect(std::fabs(static_cast<double>(LensSixty[2] / LensFortyFive[2]) - FocalSixty / FocalFortyFive) < 1.0e-5,
+               "lensing radii use the selected camera field of view");
+
+        const bool AddedFibre = CameraSpace.AddEffect(Library, "light-streaks") != nullptr;
+        const ParticleRefreshPlan FibrePlan = CameraSpace.Advance(1.0 / 60.0, 1280, 720, &ParticleCamera);
+        const auto FibreJob = std::find_if(FibrePlan.Jobs.begin(), FibrePlan.Jobs.end(), [](const ParticleRefreshJob& Job) { return Job.LightFibre; });
+        const double ExpectedFibreScale = (0.5 * 720.0) / std::tan(SceneCamera.VerticalFieldOfView * 0.5);
+        Expect(AddedFibre && FibreJob != FibrePlan.Jobs.end() &&
+                   std::fabs(static_cast<double>(FibreJob->FibreUniform[26]) - ExpectedFibreScale) < 1.0e-3,
+               "light-fibre projection scale uses the selected camera field of view");
+        std::printf("scene camera: %.6f × %.6f NDC projection, FOV %.1f°\n", Clip[0] / Clip[3], Clip[1] / Clip[3],
+                    SceneCamera.VerticalFieldOfView * 180.0 / Pi);
+    }
+
+    // ② a space with every preset, edited settings, a disabled force and an override origin
     ParticleSpace Original;
     Original.ConstructDefault(Library);
     for (const ParticlePreset& Preset : Library.Presets) (void)Original.AddEffect(Library, Preset.Identifier);
@@ -110,7 +206,7 @@ int main(int ArgumentCount, char** Arguments)
     if (!Original.Fields.empty()) Original.Fields.front().Enabled = false;
     std::printf("space: %zu effects, %zu forces\n", Original.Effects.size(), Original.Fields.size());
 
-    // ② write, read, write: one text
+    // ③ write, read, write: one text
     const std::string First = EncodeParticleSpace(Original);
     ParticleSpace     Read;
     Expect(DecodeParticleSpace(First, Read, Diagnostic), "the written space reads back (" + Diagnostic + ")");
@@ -118,7 +214,7 @@ int main(int ArgumentCount, char** Arguments)
     Expect(First == Second, "write → read → write gives the same text");
     std::printf("text: %zu bytes, %s\n", First.size(), First == Second ? "identical after the round trip" : "DIFFERENT after the round trip");
 
-    // ③ every effect, force and setting survives bit for bit
+    // ④ every effect, force and setting survives bit for bit
     Expect(Read.Effects.size() == Original.Effects.size(), "effect count");
     size_t SameEffects = 0;
     for (size_t Index = 0; Index < std::min(Read.Effects.size(), Original.Effects.size()); ++Index)
@@ -148,7 +244,7 @@ int main(int ArgumentCount, char** Arguments)
     Expect(Same(Read.TimeScale, 0.7) && Same(Read.Probe, Original.Probe), "clock and probe");
     Expect(Read.NextNumber == Original.NextNumber, "next effect number");
 
-    // ④ the read space plans the same GPU work as the original
+    // ⑤ the read space plans the same GPU work as the original
     ParticleSpace Fresh;
     Fresh.ConstructDefault(Library);
     for (const ParticlePreset& Preset : Library.Presets) (void)Fresh.AddEffect(Library, Preset.Identifier);
@@ -174,7 +270,7 @@ int main(int ArgumentCount, char** Arguments)
     Expect(SameJobs == Jobs, "every job uniform of 30 refreshes is identical");
     std::printf("refresh plans: %zu / %zu job uniforms identical over 30 refreshes\n", SameJobs, Jobs);
 
-    // ⑤ the level's Force Field joins the lattice as one more prevailing flow while the space follows it
+    // ⑥ the level's Force Field joins the lattice as one more prevailing flow while the space follows it
     {
         ParticleSpace Still, Windy, Waiting;
         for (ParticleSpace* Space : { &Still, &Windy, &Waiting }) Space->ConstructDefault(Library);
@@ -195,7 +291,7 @@ int main(int ArgumentCount, char** Arguments)
                "the file keeps following and the anchor, never the sampled flow");
     }
 
-    // ⑥ the drag volume and the current reach the field program (types 4 and 5) instead of staying authored only
+    // ⑦ the drag volume and the current reach the field program (types 4 and 5) instead of staying authored only
     {
         ParticleSpace Boxes;
         Boxes.ConstructDefault(Library);
@@ -221,7 +317,7 @@ int main(int ArgumentCount, char** Arguments)
         std::printf("box volumes: drag %s, current %s, %u field entries\n", DragPacked ? "packed" : "MISSING", CurrentPacked ? "packed" : "MISSING", Count);
     }
 
-    // ⑦ the file on disk
+    // ⑧ the file on disk
     const std::filesystem::path File = Scratch / "Validation.particlespace";
     Expect(WriteParticleSpace(Original, File, Diagnostic), "write " + File.filename().string() + " (" + Diagnostic + ")");
     ParticleSpace FromFile;
@@ -232,7 +328,7 @@ int main(int ArgumentCount, char** Arguments)
                Summary.VisibleEffects == Original.Effects.size() - 1 && Summary.Forces == Original.Fields.size(),
            "the inspector's summary");
 
-    // ⑧ malformed files are refused and leave the space alone
+    // ⑨ malformed files are refused and leave the space alone
     const auto Refused = [&](const std::string& Text, const char* Claim)
     {
         ParticleSpace Kept = Read;

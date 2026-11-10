@@ -135,7 +135,11 @@ _ClaudeScratch/build/UI/ParticleEditorCapture EngineContent Projects/Everest _Cl
 - **Box volumes:** the drag volume (type 4) and the current (type 5) now run in the field program. The prototype parity
   check covers eos's own entries and checks the box volumes separately.
 - **Tornado funnels:** authored tornado ForceSource records raise condensation funnels in the GPU clouds.
-- **Test:** `ParticleSpaceValidation`, 146/146 assertions:
+- **Default level:** `Projects/Everest/Content/Levels/Default.levelspace` has an enabled **Particles** record; its shipped
+  `Default.Particle_Effects.particlespace` is the library's four opening presets. The same space is visible as a transparent
+  layer in Everest's main Scene Viewport, using the live camera and actual scene-image extent (see
+  `Exhibits/SceneViewport/README.md#transparent-main-viewport-particle-layer`).
+- **Test:** `ParticleSpaceValidation`, 154/154 assertions:
   - 56 effects survive the round trip bit for bit, and 1680/1680 refresh uniforms are identical.
   - The level wind adds one flow only while it is followed.
   - Both box volumes are packed, and 6 malformed files are refused.
