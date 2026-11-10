@@ -58,6 +58,8 @@ struct PlanetaryWindProfile
     uint32_t Seed                    = 7331u;
     double   MesoscaleScaleMeters    = 0.0;   // [m] slow speed/direction variation wavelength (0 = none)
     double   MesoscaleStrength       = 0.0;   // [0..1] its share of the speed; 55° of turn at full strength
+    bool     Bounded                 = false; // 📝 Smooth regional fade instead of a global ambient profile.
+    double   RegionRadiusMeters      = 1600.0; // [m] horizontal radius from the field origin.
 };
 
 struct BeaufortWindClassification

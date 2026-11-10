@@ -32,6 +32,8 @@ void ConfigureAtmosphericFlow(ForceFieldSpace                          &Field,
     Profile.SwirlScaleMeters        = std::clamp<double>(Wind.TurbulenceScaleMetres, 1, 1000);
     Profile.MesoscaleScaleMeters    = std::clamp<double>(Wind.MesoscaleScaleMetres, 0, 200000);
     Profile.MesoscaleStrength       = std::clamp<double>(Wind.MesoscaleStrength, 0, 1);
+    Profile.Bounded                 = Wind.Bounded;
+    Profile.RegionRadiusMeters      = std::clamp<double>(Wind.RegionRadiusMetres, 100.0, 50000.0);
     Profile.Seed                    = Wind.Seed;
     Field.ConfigureEnabled(Controls.Enabled);
     Field.SetWindProfile(Profile);

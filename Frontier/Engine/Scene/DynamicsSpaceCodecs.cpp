@@ -103,6 +103,8 @@ struct SpaceSchema<WindConfiguration>
             MakeFieldBinding("gust_frequency_hz", &Cfg::GustFrequencyHz),
             MakeFieldBinding("turbulence_scale_metres", &Cfg::TurbulenceScaleMetres),
             MakeFieldBinding("gust_strength", &Cfg::GustStrength),
+            MakeFieldBinding("bounded_region", &Cfg::Bounded),
+            MakeClampedField("region_radius_metres", &Cfg::RegionRadiusMetres, 100.0, 50000.0),
             MakeFieldBinding("shear_per_kilometre", &Cfg::ShearPerKilometre),
             MakeFieldBinding("veer_degrees_per_kilometre", &Cfg::VeerDegreesPerKilometre),
             MakeFieldBinding("ground_height_metres", &Cfg::GroundHeightMetres),
@@ -265,6 +267,14 @@ void ForceSourceRecord::SerializeConfiguration(toml::table& OutTable) const
     {
         OutTable.insert_or_assign(Bearing.Identifier, Parameters.*(Bearing.Member));
     }
+    if (Parameters.LocalizedWindGenerator)
+    {
+        OutTable.insert_or_assign("localized_wind_generator", true);
+        OutTable.insert_or_assign("generator_gust_strength", Parameters.GeneratorGustStrength);
+        OutTable.insert_or_assign("generator_gust_frequency_hz", Parameters.GeneratorGustFrequencyHz);
+        OutTable.insert_or_assign("generator_turbulence", Parameters.GeneratorTurbulence);
+        OutTable.insert_or_assign("generator_turbulence_scale_metres", Parameters.GeneratorTurbulenceScaleMetres);
+    }
     if (Descriptor.Spin)
     {
         OutTable.insert_or_assign("spin", std::string(Parameters.Spin < 0 ? "anticyclonic" : "cyclonic"));
@@ -331,6 +341,15 @@ void ForceSourceRecord::DeserializeConfiguration(const toml::table& InTable)
         std::clamp(Detail::ReadScalarDouble(InTable, "height_metres", Parameters.HeightMetres), 0.1, 40000.0);
     Detail::ReadDoubleSequence(InTable, "half_extents_metres", Parameters.HalfExtentsMetres, 2);
     Parameters.BearingDegrees = Detail::ReadScalarDouble(InTable, "bearing_deg", Parameters.BearingDegrees);
+    Parameters.LocalizedWindGenerator = Detail::ReadScalarBool(InTable, "localized_wind_generator", Parameters.LocalizedWindGenerator);
+    Parameters.GeneratorGustStrength = std::clamp(
+        Detail::ReadScalarDouble(InTable, "generator_gust_strength", Parameters.GeneratorGustStrength), 0.0, 1.5);
+    Parameters.GeneratorGustFrequencyHz = std::clamp(
+        Detail::ReadScalarDouble(InTable, "generator_gust_frequency_hz", Parameters.GeneratorGustFrequencyHz), 0.0, 2.0);
+    Parameters.GeneratorTurbulence = std::clamp(
+        Detail::ReadScalarDouble(InTable, "generator_turbulence", Parameters.GeneratorTurbulence), 0.0, 1.5);
+    Parameters.GeneratorTurbulenceScaleMetres = std::clamp(
+        Detail::ReadScalarDouble(InTable, "generator_turbulence_scale_metres", Parameters.GeneratorTurbulenceScaleMetres), 1.0, 1000.0);
     if (const auto Name = InTable["activation"].value<std::string>())
     {
         Parameters.Activation = ParseForceActivation(*Name, Parameters.Activation);

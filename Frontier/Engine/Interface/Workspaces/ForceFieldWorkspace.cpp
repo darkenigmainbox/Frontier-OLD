@@ -1,11 +1,11 @@
 /*==========================================================================================================================================
                                                           FORCEFIELDWORKSPACE.CPP
 ==========================================================================================================================================*/
-// 🧩 The Force Field & Wind Workspace shell: top bar, outliner, Map 2D / 3D Stage viewport, timeline, log drawer, and the
-//    force library. Everything drawn here is local view state or static decor; commands that would reach the engines
-//    raise an explicit NOOP toast and log line instead (see ForceFieldWorkspace.h).
+// 🧩 The native Force Field & Wind workspace: editable scenarios and sources, sampled Map / Oblique visualization, timeline,
+//    log drawer, inline type library, and source navigation.
 
 #include "Engine/Interface/Workspaces/ForceFieldWorkspace.h"
+#include "Engine/Interface/Workspaces/ForceFieldWorkspaceRuntime.h"
 
 #include "Engine/Interface/Controls/ControlColumn.h"
 #include "Engine/Interface/Controls/ControlTheme.h"
@@ -138,12 +138,6 @@ void LogForceFieldWorkspaceValue(ForceFieldWorkspaceState& State, const char* Ch
     AppendForceFieldWorkspaceLog(State, Channel, Message, nullptr, Key);
 }
 
-void NoopForceFieldWorkspaceCommand(ForceFieldWorkspaceState& State, const char* Channel, const char* Message, const char* ToastText)
-{
-    Toast::Show(ToastText);
-    NoopForceFieldWorkspaceAction(State, Channel, Message);
-}
-
 //------------------------------------------------------------------------------------------------------------------------
 //                                                    TOP BAR
 //------------------------------------------------------------------------------------------------------------------------
@@ -151,7 +145,7 @@ void NoopForceFieldWorkspaceCommand(ForceFieldWorkspaceState& State, const char*
 namespace
 {
 
-constexpr const char* ScenarioNames[4] = { "Wind + Vortex Lab", "Dual Wind Corridor", "Storm System · 100 km", "Calm Pad · Build" };
+constexpr const char* ScenarioNames[4] = { "Wind + Vortex Lab", "Dual Wind Corridor", "Storm System · 100 km", "Blank · Build" };
 constexpr const char* SuiteNames[4]    = { "Particles", "Fracture", "Photometric", "Force Field" };
 
 void ConstructTopBar(ForceFieldWorkspaceState& State, PanelCursor& Root)
@@ -177,7 +171,7 @@ void ConstructTopBar(ForceFieldWorkspaceState& State, PanelCursor& Root)
     Root.Text(Root.Faces->Medium, 9.5f, Cursor + 9.0f * S, MidY - 0.5f * 9.5f * 1.4f * S, 1.4f, ResolveCssColour(0xEFF4CFFF),
               "FORCE FIELD + WIND", 0.9f * S);
 
-    // 📝 Scenario tabs: centred strip; switching scenes is engine work, so every tab is an explicit NOOP.
+    // 📝 Scenario tabs swap the workspace's authored preset, including a genuinely empty build scene.
     float TabsWide = 0.0f;
     float TabWidths[4]{};
     for (int Tab = 0; Tab < 4; ++Tab)
@@ -201,7 +195,7 @@ void ConstructTopBar(ForceFieldWorkspaceState& State, PanelCursor& Root)
         RecordRect(State, RectName, Min, Max);
         if (InvisibleRect("##Scenario", Min, Max) && Tab != State.Scenario)
         {
-            NoopForceFieldWorkspaceCommand(State, "SCENARIO", "Scenario switch refused", "Scenario tabs are NOOPs in this shell");
+            ApplyForceFieldWorkspacePreset(State, Tab);
         }
         ImGui::PopID();
         TabX += TabWidths[Tab] + 4.0f * S;
@@ -220,15 +214,6 @@ void ConstructTopBar(ForceFieldWorkspaceState& State, PanelCursor& Root)
         if (Current) DrawList->AddRectFilled(Min, Max, ResolveCssColour(0xEFF4CF1F), 8.0f * S);
         Root.Text(Root.Faces->Regular, 11.0f, Min.x + 9.0f * S, MidY - 0.5f * 11.0f * 1.38f * S, 1.38f,
                   ResolveCssColour(Current ? 0xEFF4CFFF : 0x848484FF), SuiteNames[Link]);
-        ImGui::PushID(Link);
-        char RectName[32]{};
-        std::snprintf(RectName, sizeof(RectName), "Top/Suite%d", Link);
-        RecordRect(State, RectName, Min, Max);
-        if (InvisibleRect("##Suite", Min, Max) && !Current)
-        {
-            NoopForceFieldWorkspaceCommand(State, "WORKSPACE", "Suite jump refused", "Suite links are NOOPs in this shell");
-        }
-        ImGui::PopID();
         LinkX -= LinkWidths[Link] + 4.0f * S;
     }
     ImGui::PopID();
@@ -1009,55 +994,76 @@ void ConstructLegend(ForceFieldWorkspaceState& State, const EditorTypefaces& Fac
                       ResolveCssColour(0xB8B8B8FF), 2.0f);
 }
 
-void ConstructMapSurface(ForceFieldWorkspaceState& State, const EditorTypefaces& Faces, ImDrawList* DrawList, ImVec2 Min, ImVec2 Max)
+void CopyVisualizationPlacement(ForceFieldWorkspaceState& State, const ForceFieldVisualization& Visualization)
+{
+    State.View.Span = Visualization.View.Span;
+    State.View.CentreX = Visualization.View.CentreX;
+    State.View.CentreZ = Visualization.View.CentreZ;
+    State.View.Yaw = Visualization.View.Yaw;
+    State.View.Pitch = Visualization.View.Pitch;
+}
+
+void ConstructLiveSurface(ForceFieldWorkspaceState& State, const EditorTypefaces& Faces, ImDrawList* DrawList,
+                          ImVec2 Min, ImVec2 Max, bool Oblique)
 {
     DrawList->AddRectFilled(Min, Max, ResolveCssColour(0x070A0FFF));
-    ConstructMapDecor(State, DrawList, Min, Max);
-    ConstructMapMarkers(State, Faces, DrawList, Min, Max);
+    ForceFieldWorkspaceRuntime& Runtime = EnsureForceFieldWorkspaceRuntime(State);
+    ForceFieldVisualization& Visualization = Runtime.Visualization;
+    Visualization.View.Mode = Oblique ? FieldViewMode::Oblique : FieldViewMode::Map;
+    Visualization.Render(DrawList, Faces, Min, Max, State.ClockTime, 1.0f);
 
-    const float HudWide = ConstructHudGroup(State, Faces, DrawList, ImVec2(Min.x + 12.0f, Min.y + 12.0f));
-    const float HudRoom = (Max.x - 134.0f) - (Min.x + 12.0f);
-    if (State.PlacementType >= 0)
+    const FieldInteraction Interaction = Visualization.ConstructNavigation(Oblique ? "##ObliqueNavigation" : "##MapNavigation", Min, Max);
+    if (Interaction.PickedSource >= 0 && static_cast<size_t>(Interaction.PickedSource) < State.Sources.size())
     {
-        if (HudWide + 8.0f + 420.0f <= HudRoom) ConstructPlaceBanner(State, Faces, DrawList, ImVec2(Min.x + 12.0f + HudWide + 8.0f, Min.y + 12.0f), 420.0f);
-        else ConstructPlaceBanner(State, Faces, DrawList, ImVec2(Min.x + 12.0f, Min.y + 12.0f + 37.0f), HudRoom);
+        State.Selected = Interaction.PickedSource;
+        State.View.Follow = Interaction.PickedSource;
     }
-    ConstructMinimap(State, Faces, DrawList, ImVec2(Max.x - 12.0f, Min.y + 12.0f + 100.0f));
-    ConstructLegend(State, Faces, DrawList, ImVec2(Min.x + 14.0f, Max.y - 14.0f - 118.0f), Max.x - Min.x);
-
-    // 📝 The surface click submits last so HUD pills and the banner cancel win their own presses.
-    ImGui::PushID("MapSurface");
-    RecordRect(State, "Surface/Map", Min, Max);
-    if (InvisibleRect("##MapClick", Min, Max) && State.PlacementType >= 0)
+    if (Interaction.MovedSource >= 0 && static_cast<size_t>(Interaction.MovedSource) < State.Sources.size())
     {
-        NoopForceFieldWorkspaceCommand(State, "PLACE", "Placement refused", "Placement is disabled in this shell (NOOP)");
+        ForceFieldWorkspaceSource& Source = State.Sources[static_cast<size_t>(Interaction.MovedSource)];
+        Source.Centre[0] = Interaction.MovedTo[0];
+        Source.Centre[2] = -Interaction.MovedTo[1];
+    }
+    if (Interaction.Clicked && State.PlacementType >= 0)
+    {
+        (void)AddForceFieldWorkspaceSource(State, State.PlacementType, Interaction.ClickPoint[0],
+                                           Visualization.Options.SliceHeight, -Interaction.ClickPoint[1]);
         State.PlacementType = -1;
     }
+    CopyVisualizationPlacement(State, Visualization);
+
+    (void)ConstructHudGroup(State, Faces, DrawList, ImVec2(Min.x + 12.0f, Min.y + 12.0f));
+    const ImVec2 MiniMin(Max.x - 124.0f, Min.y + 12.0f);
+    const ImVec2 MiniMax(Max.x - 12.0f, Min.y + 112.0f);
+    (void)Visualization.ConstructMinimap("##ForceFieldMinimap", DrawList, MiniMin, MiniMax, State.ClockTime, 1.0f);
+    RecordRect(State, "Minimap", MiniMin, MiniMax);
+    CopyVisualizationPlacement(State, Visualization);
+    ConstructPlaceBanner(State, Faces, DrawList, ImVec2(Min.x + 12.0f, Min.y + 48.0f), Max.x - Min.x - 24.0f);
+    if (Oblique)
+    {
+        PanelCursor Cursor{DrawList, &Faces, 1.0f, Min.x, Max.x - Min.x, Min.y};
+        Cursor.Text(Faces.Medium, 10.0f, Max.x - 126.0f, Min.y + 122.0f, 1.4f,
+                    ResolveCssColour(0xD2D8E2FF), "OBLIQUE SLICE · ALT/RIGHT DRAG TO ORBIT", 0.3f);
+    }
+    ImGui::PushID(Oblique ? "ObliqueSurface" : "MapSurface");
+    RecordRect(State, Oblique ? "Surface/Stage3D" : "Surface/Map", Min, Max);
     ImGui::PopID();
+}
+
+void ConstructMapSurface(ForceFieldWorkspaceState& State, const EditorTypefaces& Faces, ImDrawList* DrawList, ImVec2 Min, ImVec2 Max)
+{
+    ConstructLiveSurface(State, Faces, DrawList, Min, Max, false);
 }
 
 void ConstructStage3DSurface(ForceFieldWorkspaceState& State, const EditorTypefaces& Faces, ImDrawList* DrawList, ImVec2 Min, ImVec2 Max)
 {
-    DrawList->AddRectFilled(Min, Max, ResolveCssColour(0x0A0C10FF));
-    PanelCursor Cursor{ DrawList, &Faces, 1.0f, Min.x, Max.x - Min.x, Min.y };
-    const ImVec2 Centre(0.5f * (Min.x + Max.x), 0.5f * (Min.y + Max.y));
-    (void)GlyphSymbol::Construct(DrawList, "StudioFieldGlobe", ImVec2(Centre.x - 13.0f, Centre.y - 52.0f), 26.0f, 1.6f,
-                                 ResolveCssColour(0x4A5058FF));
-    const float TitleWide = Cursor.Measure(Faces.Light, 17.0f, "3D Stage");
-    Cursor.Text(Faces.Light, 17.0f, Centre.x - TitleWide * 0.5f, Centre.y - 16.0f, 1.3f, ResolveCssColour(0xDADADADA), "3D Stage");
-    const char* NoteA = "Interactive 3D preview is disabled in this shell —";
-    const char* NoteB = "Map 2D shows the same static decor.";
-    Cursor.Text(Faces.Regular, 11.0f, Centre.x - Cursor.Measure(Faces.Regular, 11.0f, NoteA) * 0.5f, Centre.y + 10.0f, 1.4f,
-                ResolveCssColour(0x757575FF), NoteA);
-    Cursor.Text(Faces.Regular, 11.0f, Centre.x - Cursor.Measure(Faces.Regular, 11.0f, NoteB) * 0.5f, Centre.y + 26.0f, 1.4f,
-                ResolveCssColour(0x757575FF), NoteB);
-    (void)ConstructHudGroup(State, Faces, DrawList, ImVec2(Min.x + 12.0f, Min.y + 12.0f));
-    RecordRect(State, "Surface/Stage3D", Min, Max);
+    ConstructLiveSurface(State, Faces, DrawList, Min, Max, true);
 }
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                    TIMELINE
 //------------------------------------------------------------------------------------------------------------------------
+
 
 void ConstructTimelineStrip(ForceFieldWorkspaceState& State, const EditorTypefaces& Faces, PanelCursor& Panel)
 {
@@ -1211,9 +1217,8 @@ void ConstructTimelineStrip(ForceFieldWorkspaceState& State, const EditorTypefac
                         ResolveCssColour(0xE8C27AFF), "FIRE");
             if (FirePressed)
             {
-                char Message[128]{};
-                std::snprintf(Message, sizeof(Message), "Fire %s refused", Source.Name.c_str());
-                NoopForceFieldWorkspaceCommand(State, "FORCES", Message, "Firing pulses is a NOOP in this shell");
+                State.Selected = static_cast<int>(Index);
+                (void)FireForceFieldWorkspaceSource(State, static_cast<int>(Index));
             }
         }
         ImGui::PopID();
@@ -1323,19 +1328,54 @@ void ConstructLibrarySheet(ForceFieldWorkspaceState& State, const EditorTypeface
     ImDrawList* const InnerList = ImGui::GetWindowDrawList();
     PanelCursor       Content{ InnerList, &Faces, 1.0f, SheetMin.x + 20.0f, SheetWide - 40.0f, Sheet.Y };
 
-    // 📝 The 17-card library moved out to the shared Asset Browser; the sheet keeps its chrome and hands off.
+    // 📝 The native library is inline so type choice arms an actual workspace placement, not a browser handoff.
     {
-        const ImVec2 Browse = Content.Space(64.0f, 8.0f, 0.0f);
+        constexpr int Columns = 3;
+        constexpr float Gap = 8.0f;
+        const float CardWide = (Content.Width - Gap * (Columns - 1)) / Columns;
+        const int TypeCount = QueryForceFieldTypeCount();
+        for (int Row = 0; Row < (TypeCount + Columns - 1) / Columns; ++Row)
+        {
+            const ImVec2 RowTop = Content.Space(66.0f, Row == 0 ? 8.0f : 0.0f, 7.0f);
+            for (int Column = 0; Column < Columns; ++Column)
+            {
+                const int TypeIndex = Row * Columns + Column;
+                if (TypeIndex >= TypeCount) break;
+                const ForceFieldWorkspaceType& Type = QueryForceFieldType(TypeIndex);
+                const ImVec2 CardMin(RowTop.x + Column * (CardWide + Gap), RowTop.y);
+                const ImVec2 CardMax(CardMin.x + CardWide, CardMin.y + 66.0f);
+                const ImU32 Accent = ResolveCssColour(Type.Colour);
+                InnerList->AddRectFilled(CardMin, CardMax, ResolveCssColour(0x1A1A1AFF), 13.0f);
+                InnerList->AddRect(CardMin, CardMax, ResolveAlpha(Accent, 0.32f), 13.0f, ImDrawFlags_None, 1.0f);
+                const ImVec2 GlyphAt(CardMin.x + 12.0f, CardMin.y + 15.0f);
+                (void)GlyphSymbol::Construct(InnerList, Type.Glyph, GlyphAt, 19.0f, 1.8f, Accent);
+                Content.Text(Faces.Medium, 11.0f, CardMin.x + 40.0f, CardMin.y + 12.0f, 1.3f, ResolveCssColour(0xE8E8E8FF), Type.Name);
+                Content.Text(Faces.Regular, 9.5f, CardMin.x + 40.0f, CardMin.y + 34.0f, 1.35f,
+                             ResolveCssColour(0x868686FF), QueryForceFieldContributionUnit(Type.Contribution));
+                char RectName[40]{};
+                std::snprintf(RectName, sizeof(RectName), "Library/Type%d", TypeIndex);
+                RecordRect(State, RectName, CardMin, CardMax);
+                ImGui::PushID(TypeIndex);
+                if (InvisibleRect("##LibraryType", CardMin, CardMax))
+                {
+                    State.PlacementType = TypeIndex;
+                    State.LibraryOpen = false;
+                    char Message[128]{};
+                    std::snprintf(Message, sizeof(Message), "Placement armed: %s", Type.Name);
+                    AppendForceFieldWorkspaceLog(State, "PLACE", Message, "click or drag the live slice to place", "Place");
+                }
+                ImGui::PopID();
+            }
+        }
+        const ImVec2 Browse = Content.Space(56.0f, 8.0f, 0.0f);
         const ImVec2 BrowseMin(Browse.x, Browse.y);
-        const ImVec2 BrowseMax(Browse.x + Content.Width, Browse.y + 64.0f);
-        InnerList->AddRectFilled(BrowseMin, BrowseMax, ResolveCssColour(0x1A1A1AFF), 16.0f);
-        InnerList->AddRect(BrowseMin, BrowseMax, ResolveCssColour(0xE8C27A66), 16.0f, ImDrawFlags_None, 1.0f);
-        Content.Text(Faces.Medium, 13.0f, BrowseMin.x + 16.0f, BrowseMin.y + 10.0f, 1.3f,
-                     ResolveCssColour(0xE8C27AFF), "Browse forcefield types\u2026");
-        Content.Text(Faces.Regular, 10.5f, BrowseMin.x + 16.0f, BrowseMin.y + 34.0f, 1.4f,
-                     ResolveCssColour(0x848484FF), "17 types \u00B7 opens the shared Asset Browser");
-        Content.Text(Faces.Medium, 14.0f, BrowseMax.x - 34.0f, BrowseMin.y + 20.0f, 1.3f,
-                     ResolveCssColour(0xE8C27AFF), "\u2197");
+        const ImVec2 BrowseMax(Browse.x + Content.Width, Browse.y + 56.0f);
+        InnerList->AddRectFilled(BrowseMin, BrowseMax, ResolveCssColour(0x171717FF), 14.0f);
+        InnerList->AddRect(BrowseMin, BrowseMax, ResolveCssColour(0xFFFFFF18), 14.0f, ImDrawFlags_None, 1.0f);
+        Content.Text(Faces.Medium, 11.0f, BrowseMin.x + 14.0f, BrowseMin.y + 11.0f, 1.3f,
+                     ResolveCssColour(0xBDBDBDFF), "Browse the shared Asset Browser");
+        Content.Text(Faces.Regular, 9.5f, BrowseMin.x + 14.0f, BrowseMin.y + 31.0f, 1.35f,
+                     ResolveCssColour(0x777777FF), "17 native source types are also available above");
         RecordRect(State, "Library/Browse", BrowseMin, BrowseMax);
         if (InvisibleRect("##LibraryBrowse", BrowseMin, BrowseMax))
         {
@@ -1401,11 +1441,20 @@ void ConstructForceFieldWorkspace(ForceFieldWorkspaceState& State, const EditorT
 {
     ApplyForceFieldWorkspaceLink(State, Link);
     State.Rects.clear();
+    if (State.TimelineDuration <= 0.0) State.TimelineDuration = 60.0;
     if (State.ClockPlaying)
     {
         State.ClockTime += static_cast<double>(ImGui::GetIO().DeltaTime) * State.ClockRate;
         if (State.ClockTime > State.TimelineDuration) State.ClockTime = std::fmod(State.ClockTime, State.TimelineDuration);
     }
+    if (State.View.Follow >= 0 && static_cast<size_t>(State.View.Follow) < State.Sources.size())
+    {
+        State.View.CentreX = State.Sources[static_cast<size_t>(State.View.Follow)].Centre[0];
+        State.View.CentreZ = -State.Sources[static_cast<size_t>(State.View.Follow)].Centre[2];
+    }
+    SynchronizeForceFieldWorkspaceRuntime(State);
+    if (State.PlacementType >= 0 && ImGui::IsKeyPressed(ImGuiKey_Escape) && !ImGui::GetIO().WantTextInput)
+        State.PlacementType = -1;
 
     ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
     ImGui::SetNextWindowSize(Size);
@@ -1468,7 +1517,7 @@ void ConstructForceFieldWorkspace(ForceFieldWorkspaceState& State, const EditorT
     DrawList->AddLine(ImVec2(CentreMin.x, Foot.y), ImVec2(ViewportMax.x, Foot.y), ResolveCssColour(0xFFFFFF12));
     PanelCursor FootCursor{ DrawList, &Faces, 1.0f, CentreMin.x, ViewportMax.x - CentreMin.x, Foot.y };
     FootCursor.Text(Faces.Regular, 10.5f, CentreMin.x + 14.0f, Foot.y + 15.0f - 0.5f * 10.5f * 1.4f, 1.4f,
-                    ResolveCssColour(0x848484FF), "Finite bounded forcefields · RK2 streamlines + vector field · static shell decor");
+                    ResolveCssColour(0x848484FF), "Native ForceFieldSpace · live RK2 streamlines + vectors · editable bounded sources");
     const float LogPillWide = FootCursor.Measure(Faces.Medium, 11.0f, "Log Stream") + 18.0f;
     const ImVec2 LogPillMax(ViewportMax.x - 14.0f, Foot.y + 26.0f);
     const ImVec2 LogPillMin(LogPillMax.x - LogPillWide, Foot.y + 4.0f);

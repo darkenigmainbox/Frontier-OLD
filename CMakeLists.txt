@@ -272,6 +272,7 @@ add_library(FrontierSceneEditorUI STATIC
     Frontier/Engine/Interface/ViewportChromeControls.cpp
     Frontier/Engine/Interface/Workspaces/ForceFieldWorkspace.cpp
     Frontier/Engine/Interface/Workspaces/ForceFieldWorkspaceCatalogue.cpp
+    Frontier/Engine/Interface/Workspaces/ForceFieldWorkspaceRuntime.cpp
     Frontier/Engine/Interface/Workspaces/ForceFieldWorkspaceInspector.cpp
     Frontier/Engine/Interface/Workspaces/ParticleWorkspace.cpp
     Frontier/Engine/Interface/Workspaces/ParticleWorkspaceCatalogue.cpp

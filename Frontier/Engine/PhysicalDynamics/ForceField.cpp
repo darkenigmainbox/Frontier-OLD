@@ -334,6 +334,7 @@ void ForceFieldSpace::SetElapsedSeconds(double Seconds) noexcept
 void ForceFieldSpace::SetWindProfile(const PlanetaryWindProfile& Profile) noexcept
 {
     Wind_ = Profile;
+    Wind_.RegionRadiusMeters = std::clamp(Wind_.RegionRadiusMeters, 100.0, 50000.0);
     PrepareAuthoredSources();
 }
 
@@ -515,6 +516,14 @@ SpatialVector ForceFieldSpace::SampleSwirl(SpatialVector WorldPointMeters, doubl
 SpatialVector ForceFieldSpace::EvaluateWindFlow(SpatialVector WorldPointMeters, bool IncludeCurlSwirl, double CellSpanMeters) const noexcept
 {
     if (!Enabled_) return {};
+    double RegionFade = 1.0;
+    if (Wind_.Bounded)
+    {
+        const double Radius = std::max(100.0, Wind_.RegionRadiusMeters);
+        const double Share = std::hypot(WorldPointMeters.X, WorldPointMeters.Z) / Radius;
+        if (Share >= 1.0) return {};
+        RegionFade = 1.0 - Smooth01(Share);
+    }
     const double AltAboveGroundM = std::max(0.0, WorldPointMeters.Y - GroundPlaneYMeters_);
     const double AltKm           = AltAboveGroundM * 1.0e-3;
     double       Bearing         = Wind_.BearingRadians + Wind_.VeerRadiansPerKilometer * AltKm;
@@ -551,6 +560,9 @@ SpatialVector ForceFieldSpace::EvaluateWindFlow(SpatialVector WorldPointMeters, 
         Flow.Y += Eddy.Y;
         Flow.Z += Eddy.Z;
     }
+    Flow.X *= RegionFade;
+    Flow.Y *= RegionFade;
+    Flow.Z *= RegionFade;
     return Flow;
 }
 

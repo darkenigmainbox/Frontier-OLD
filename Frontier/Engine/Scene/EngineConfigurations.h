@@ -583,8 +583,10 @@ struct WindConfiguration : RevisionCounter
     // 📝 Relative gust strength is separate from the earlier absolute GustAmplitude [m/s].
     float GustFrequencyHz = 0.085f;
     float TurbulenceScaleMetres = 95.0f;
-    float GustStrength           = 0.25f;
-    float ShearPerKilometre      = 0.15f;
+    float    GustStrength           = 0.25f;
+    bool     Bounded                = false; // 📝 Smoothly fade the atmospheric profile outside the regional radius.
+    float    RegionRadiusMetres     = 1600.0f;
+    float    ShearPerKilometre      = 0.15f;
     float VeerDegreesPerKilometre = 8.0f;
     // 📝 A slow speed and direction variation over tens of kilometres, so a 100 km view is not one uniform arrow.
     float    MesoscaleScaleMetres = 18000.0f;
@@ -622,8 +624,16 @@ struct ForceSourceConfiguration : RevisionCounter
     double UpdraftMetresPerSecond     = 42.0;
     double Spin                       = 1.0;    // [-] +1 cyclonic (counter-clockwise from above), −1 anticyclonic
     double TrackBearingDegrees        = 109.0;
-    double TrackSpeedMetresPerSecond  = 3.7;
-    double FrontSpeedMetresPerSecond  = 18.0;
+    double TrackSpeedMetresPerSecond = 3.7;
+
+    // 📝 A localized Wind Generator is a Current source with time-varying gust and curl terms inside its normal reach.
+    bool   LocalizedWindGenerator         = false;
+    double GeneratorGustStrength          = 0.25;
+    double GeneratorGustFrequencyHz       = 0.14;
+    double GeneratorTurbulence            = 0.35;
+    double GeneratorTurbulenceScaleMetres = 42.0;
+
+    double FrontSpeedMetresPerSecond = 18.0;
     double CrestDepthMetres           = 85.0;
     double HalfWidthMetres            = 900.0;
     double BearingDegrees             = 0.0;

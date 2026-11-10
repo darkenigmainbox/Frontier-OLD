@@ -1,12 +1,10 @@
 /*==========================================================================================================================================
                                                       FORCEFIELDWORKSPACEINSPECTOR.CPP
 ==========================================================================================================================================*/
-// 🧩 The Force Field & Wind Workspace inspector: the three Remastered pages (master workspace, ambient wind, force source) as
-//    UI shells. Value controls hold shell-local figures and log through the Bind wording; every command that would
-//    mutate the scene (frame, duplicate, remove, fire, copy, reset) is an explicit NOOP with a toast and a log line.
-//    The hero metrics, canned series, influence profiles, and TOML preview are static decor computed from shell state.
+// 🧩 The Force Field & Wind workspace inspector: editable field, wind and source state, with live actions and native Levelspace export.
 
 #include "Engine/Interface/Workspaces/ForceFieldWorkspace.h"
+#include "Engine/Interface/Workspaces/ForceFieldWorkspaceRuntime.h"
 
 #include "Engine/Interface/Controls/ActionRow.h"
 #include "Engine/Interface/Controls/ChipToggles.h"
@@ -20,6 +18,8 @@
 #include "Engine/Interface/Controls/SegmentedRow.h"
 #include "Engine/Interface/Controls/SliderPill.h"
 #include "Engine/Interface/Controls/StatGrid.h"
+#include "Engine/Interface/Controls/TextRow.h"
+#include "Engine/Interface/Controls/Toast.h"
 #include "Engine/Interface/Controls/SwitchPill.h"
 #include "Engine/Interface/Controls/TimeSeries.h"
 #include "Engine/Interface/Controls/ToggleTile.h"
@@ -33,6 +33,8 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -320,296 +322,20 @@ BeaufortReading ResolveBeaufort(double Speed) noexcept
 }
 
 //------------------------------------------------------------------------------------------------------------------------
-//                                                    LEVELSPACE TOML
+//                                                    NATIVE LEVELSPACE PREVIEW
 //------------------------------------------------------------------------------------------------------------------------
 
-void AppendTomlFigure(std::string& Out, double Value)
+std::vector<std::string> ReadLevelspacePreview(const ForceFieldWorkspaceState& State)
 {
-    char Figure[64]{};
-    const double Rounded = std::round(Value);
-    if (std::fabs(Value - Rounded) < 1e-9 * std::max(1.0, std::fabs(Value))) std::snprintf(Figure, sizeof(Figure), "%.1f", Rounded);
-    else
-    {
-        std::snprintf(Figure, sizeof(Figure), "%.4f", Value);
-        char* Dot = std::strchr(Figure, '.');
-        if (Dot != nullptr)
-        {
-            char* End = Figure + std::strlen(Figure);
-            while (End > Dot + 1 && End[-1] == '0') --End;
-            if (End == Dot + 1) --End;
-            *End = '\0';
-        }
-    }
-    Out += Figure;
-}
+    if (State.ExportPreview.empty())
+        return {"No export written yet.", "Choose a .levelspace path above,", "then export the native records."};
 
-void AppendSnake(std::string& Out, const char* Key)
-{
-    for (const char* P = Key; *P != '\0'; ++P)
-    {
-        const unsigned char C = static_cast<unsigned char>(*P);
-        if (C >= 'A' && C <= 'Z')
-        {
-            if (P != Key) Out += '_';
-            Out += static_cast<char>(C - 'A' + 'a');
-        }
-        else Out += static_cast<char>(C);
-    }
-}
-
-void AppendLower(std::string& Out, const char* Text)
-{
-    for (const char* P = Text; *P != '\0'; ++P) Out += static_cast<char>(std::tolower(static_cast<unsigned char>(*P)));
-}
-
-void AppendTomlString(std::string& Out, const char* Text)
-{
-    Out += '"';
-    for (const char* P = Text; *P != '\0'; ++P)
-    {
-        if (*P == '"' || *P == '\\') Out += '\\';
-        Out += *P;
-    }
-    Out += '"';
-}
-
-void EncodeLevelspace(const ForceFieldWorkspaceState& State, std::vector<std::string>& Lines)
-{
-    Lines.clear();
-    Lines.emplace_back("[[records]]");
-    Lines.emplace_back("identity = \"rec_force_field\"");
-    Lines.emplace_back("type = \"ForceField\"");
-    Lines.emplace_back("name = \"Force Field\"");
-    Lines.emplace_back("[records.configuration]");
-    Lines.emplace_back(State.FieldEnabled ? "enabled = true" : "enabled = false");
-    Lines.emplace_back("visualize = true");
-    Lines.emplace_back("include_turbulence = true");
-    Lines.emplace_back("centre_metres = [0.0, 0.0, 0.0]");
-    Lines.emplace_back("half_extents_metres = [600.0, 120.0, 600.0]");
-    Lines.emplace_back("grid_resolution = 5");
-    Lines.emplace_back("arrow_seconds = 0.5");
-    Lines.emplace_back("cascades = 4");
-    Lines.emplace_back("finest_cell_metres = 2.0");
-    Lines.emplace_back("cells_per_side = 128");
-    Lines.emplace_back("vertical_cells = 32");
-    Lines.emplace_back("extent_metres = 100000.0");
-    {
-        std::string Channels = "channels = [";
-        bool        First    = true;
-        for (int Index = 0; Index < 7; ++Index)
-        {
-            if (!State.FieldChannels[Index]) continue;
-            if (!First) Channels += ", ";
-            Channels += '"';
-            AppendLower(Channels, QueryForceFieldChannel(Index));
-            Channels += '"';
-            First = false;
-        }
-        Channels += "]";
-        Lines.push_back(Channels);
-    }
-
-    const ForceFieldWorkspaceState::WindState& Wind = State.Wind;
-    Lines.emplace_back("");
-    Lines.emplace_back("[[records]]");
-    Lines.emplace_back("identity = \"rec_wind\"");
-    Lines.emplace_back("type = \"Wind\"");
-    Lines.emplace_back("name = \"Wind\"");
-    Lines.emplace_back("parent = \"rec_force_field\"");
-    Lines.emplace_back("[records.configuration]");
-    Lines.emplace_back(Wind.Enabled ? "enabled = true" : "enabled = false");
-    {
-        std::string Line = "direction_deg = ";
-        AppendTomlFigure(Line, Wind.Bearing);
-        Lines.push_back(Line);
-    }
-    {
-        std::string Line = "speed_mps = ";
-        AppendTomlFigure(Line, Wind.Speed);
-        Lines.push_back(Line);
-    }
-    {
-        std::string Line = "turbulence = ";
-        AppendTomlFigure(Line, Wind.Turbulence);
-        Lines.push_back(Line);
-    }
-    Lines.emplace_back("turbulence_scale_metres = 65.0");
-    {
-        std::string Line = "gust_strength = ";
-        AppendTomlFigure(Line, Wind.GustStrength);
-        Lines.push_back(Line);
-    }
-    {
-        std::string Line = "gust_frequency_hz = ";
-        AppendTomlFigure(Line, Wind.GustFrequency);
-        Lines.push_back(Line);
-    }
-    {
-        std::string Line = "shear_per_kilometre = ";
-        AppendTomlFigure(Line, Wind.Shear);
-        Lines.push_back(Line);
-    }
-    {
-        std::string Line = "veer_degrees_per_kilometre = ";
-        AppendTomlFigure(Line, Wind.Veer);
-        Lines.push_back(Line);
-    }
-    Lines.emplace_back("advect_clouds = true");
-    Lines.emplace_back("advect_plumes = true");
-    Lines.emplace_back("advect_particles = true");
-    Lines.emplace_back("ground_height_metres = 0.0");
-    Lines.emplace_back("seed = 7331");
-    Lines.emplace_back(Wind.Bounded ? "bounded_region = true" : "bounded_region = false");
-    {
-        std::string Line = "region_radius_metres = ";
-        AppendTomlFigure(Line, Wind.RegionRadius);
-        Lines.push_back(Line);
-    }
-
-    for (size_t SourceIndex = 0; SourceIndex < State.Sources.size(); ++SourceIndex)
-    {
-        const ForceFieldWorkspaceSource& Source = State.Sources[SourceIndex];
-        const ForceFieldWorkspaceType&   Type   = QueryForceFieldType(Source.Type);
-        Lines.emplace_back("");
-        Lines.emplace_back("[[records]]");
-        {
-            char Identity[48]{};
-            std::snprintf(Identity, sizeof(Identity), "identity = \"src_lab_%d\"", static_cast<int>(SourceIndex));
-            Lines.emplace_back(Identity);
-        }
-        Lines.emplace_back("type = \"ForceSource\"");
-        {
-            std::string Line = "name = ";
-            AppendTomlString(Line, Source.Name.c_str());
-            Lines.push_back(Line);
-        }
-        Lines.emplace_back("parent = \"rec_force_field\"");
-        Lines.emplace_back("[records.configuration]");
-        Lines.emplace_back(Source.Enabled ? "enabled = true" : "enabled = false");
-        {
-            std::string Line = "source = ";
-            AppendTomlString(Line, Type.Native);
-            Lines.push_back(Line);
-        }
-        {
-            std::string Line = "contribution = \"";
-            AppendLower(Line, ContribLabel(Type.Contribution));
-            Line += '"';
-            Lines.push_back(Line);
-        }
-        {
-            std::string Line = "centre_metres = [";
-            AppendTomlFigure(Line, Source.Centre[0]);
-            Line += ", ";
-            AppendTomlFigure(Line, Source.Centre[1]);
-            Line += ", ";
-            AppendTomlFigure(Line, Source.Centre[2]);
-            Line += "]";
-            Lines.push_back(Line);
-        }
-        {
-            std::string Line = "reach = \"";
-            AppendLower(Line, QueryForceFieldReachName(Source.Reach));
-            Line += '"';
-            Lines.push_back(Line);
-        }
-        {
-            std::string Line = "reach_metres = ";
-            AppendTomlFigure(Line, Source.Radius);
-            Lines.push_back(Line);
-        }
-        {
-            std::string Line = "falloff = \"";
-            AppendLower(Line, QueryForceFieldFalloffName(Source.Falloff));
-            Line += '"';
-            Lines.push_back(Line);
-        }
-        {
-            std::string Line = "strength = ";
-            AppendTomlFigure(Line, Source.Params[0]);
-            Lines.push_back(Line);
-        }
-        for (int Param = 0; Param < Type.ParamCount && Param < 7; ++Param)
-        {
-            if (std::strcmp(Type.Params[Param].Key, "Strength") == 0) continue;
-            std::string Line;
-            AppendSnake(Line, Type.Params[Param].Key);
-            Line += " = ";
-            AppendTomlFigure(Line, Source.Params[Param]);
-            Lines.push_back(Line);
-        }
-        if (Type.BearingKey != nullptr)
-        {
-            const bool  Track  = std::strcmp(Type.BearingKey, "TrackBearing") == 0;
-            std::string Line;
-            AppendSnake(Line, Type.BearingKey);
-            Line += "_deg = ";
-            AppendTomlFigure(Line, Track ? Source.TrackBearing : Source.Bearing);
-            Lines.push_back(Line);
-        }
-        if (Type.Spin) Lines.emplace_back(Source.Spin < 0 ? "spin = \"anticyclonic\"" : "spin = \"cyclonic\"");
-        if (Source.Reach == ForceFieldReachColumn || Source.Reach == ForceFieldReachBox)
-        {
-            std::string Line = "height_metres = ";
-            AppendTomlFigure(Line, Source.Height);
-            Lines.push_back(Line);
-        }
-        if (Source.Reach == ForceFieldReachBox && std::strcmp(Type.Id, "Jet") != 0 && std::strcmp(Type.Id, "Wake") != 0)
-        {
-            std::string Line = "half_extents_metres = [";
-            AppendTomlFigure(Line, Source.HalfX);
-            Line += ", ";
-            AppendTomlFigure(Line, Source.HalfZ);
-            Line += "]";
-            Lines.push_back(Line);
-        }
-        {
-            std::string Line = "activation = \"";
-            AppendLower(Line, QueryForceFieldActivationName(Source.Activation));
-            Line += '"';
-            Lines.push_back(Line);
-        }
-        {
-            std::string Line = "begins_seconds = ";
-            AppendTomlFigure(Line, Source.Begins);
-            Lines.push_back(Line);
-        }
-        {
-            std::string Line = "lasts_seconds = ";
-            AppendTomlFigure(Line, Source.Lasts);
-            Lines.push_back(Line);
-        }
-        {
-            std::string Line = "repeats_seconds = ";
-            AppendTomlFigure(Line, Source.Repeats);
-            Lines.push_back(Line);
-        }
-        {
-            std::string Line = "ramp_in_seconds = ";
-            AppendTomlFigure(Line, Source.RampIn);
-            Lines.push_back(Line);
-        }
-        {
-            std::string Line = "ramp_out_seconds = ";
-            AppendTomlFigure(Line, Source.RampOut);
-            Lines.push_back(Line);
-        }
-        {
-            std::string Line = "acts_on = [";
-            bool        First = true;
-            for (int Index = 0; Index < 7; ++Index)
-            {
-                if (!Source.Acts[Index]) continue;
-                if (!First) Line += ", ";
-                Line += '"';
-                AppendLower(Line, QueryForceFieldChannel(Index));
-                Line += '"';
-                First = false;
-            }
-            Line += "]";
-            Lines.push_back(Line);
-        }
-    }
+    std::vector<std::string> Lines;
+    std::istringstream Input(State.ExportPreview);
+    std::string Line;
+    while (Lines.size() < 120 && std::getline(Input, Line)) Lines.push_back(Line);
+    if (Input && Lines.size() == 120) Lines.emplace_back("… preview truncated …");
+    return Lines;
 }
 
 void LevelspacePre(ControlColumn& Column, const char* Id, const std::vector<std::string>& Lines)
@@ -1046,19 +772,57 @@ void FieldPage(ForceFieldWorkspaceState& State, ControlColumn& Column)
     }
     EndInspectorSection(Column);
 
-    const bool LevelOpen = BeginInspectorSection(Column, State, "lvl", "Levelspace Export", "StudioFieldCopy", "TOML",
+    const bool LevelOpen = BeginInspectorSection(Column, State, "lvl", "Native Levelspace Export", "StudioFieldCopy", "LEVELSPACE",
                                                  State.CardLevel);
     if (LevelOpen)
     {
-        const ActionItem LevelActions[2] = { { "Copy Levelspace", "StudioFieldCopy", ActionTone::Default },
-                                             { "Reset Preset", "StudioFieldReset", ActionTone::Default } };
-        const int        Fired           = ActionRow::Construct(Column, "##Levelspace", LevelActions, 2);
-        if (Fired == 0) NoopForceFieldWorkspaceCommand(State, "WORKSPACE", "Copy Levelspace refused", "Copy is a NOOP in this shell");
+        if (TextRow::Construct(Column, "ExportPath", "Destination (.levelspace)", State.ExportPath, true,
+                               "Path is relative to the application working directory unless it is absolute."))
+            State.ExportStatus = "Destination changed; click Export native .levelspace to write it.";
+
+        const ActionItem LevelActions[2] = { { "Export .levelspace", "StudioFieldCopy", ActionTone::Accent },
+                                             { "Reset preset", "StudioFieldReset", ActionTone::Default } };
+        ImVec4 ActionRects[2]{};
+        const int Fired = ActionRow::Construct(Column, "##Levelspace", LevelActions, 2, true, nullptr,
+                                               ActionRowVoice::Charcoal, ActionRects);
+        for (int Action = 0; Action < 2; ++Action)
+        {
+            const char* RectName = Action == 0 ? "Inspector/LevelAction0" : "Inspector/LevelAction1";
+            RecordForceFieldWorkspaceRect(State, RectName, ImVec2(ActionRects[Action].x, ActionRects[Action].y),
+                                          ImVec2(ActionRects[Action].z, ActionRects[Action].w));
+        }
+        if (Fired == 0)
+        {
+            std::string Diagnostic;
+            if (ExportForceFieldWorkspaceLevelSpace(State, std::filesystem::path(State.ExportPath), &Diagnostic))
+            {
+                std::ifstream Input(State.ExportPath, std::ios::binary);
+                if (Input)
+                {
+                    std::ostringstream Contents;
+                    Contents << Input.rdbuf();
+                    State.ExportPreview = Contents.str();
+                }
+                State.ExportStatus = "Exported native ForceField, Wind, and " + std::to_string(State.Sources.size()) +
+                                     " ForceSource records to " + State.ExportPath;
+                AppendForceFieldWorkspaceLog(State, "EXPORT", "Saved native Levelspace", State.ExportPath.c_str());
+                Toast::Show("Native Levelspace exported");
+            }
+            else
+            {
+                State.ExportStatus = Diagnostic.empty() ? "Native Levelspace export failed." : Diagnostic;
+                AppendForceFieldWorkspaceLog(State, "EXPORT", "Native Levelspace export failed", State.ExportStatus.c_str());
+                Toast::Show("Levelspace export failed");
+            }
+        }
         else if (Fired == 1)
-            NoopForceFieldWorkspaceCommand(State, "SCENARIO", "Reset preset refused", "Scenario presets are NOOPs in this shell");
-        std::vector<std::string> Lines;
-        EncodeLevelspace(State, Lines);
-        LevelspacePre(Column, "Levelspace", Lines);
+        {
+            const int Scenario = State.Scenario;
+            ApplyForceFieldWorkspacePreset(State, Scenario);
+            Toast::Show("Workspace preset reset");
+        }
+        SubtitleRow(Column, State.ExportStatus.c_str());
+        LevelspacePre(Column, "Levelspace", ReadLevelspacePreview(State));
     }
     EndInspectorSection(Column);
 }
@@ -1181,24 +945,41 @@ void SourcePage(ForceFieldWorkspaceState& State, ControlColumn& Column, int Inde
     const ActionItem SourceActions[3] = { { "Frame", "StudioFieldRuler", ActionTone::Default },
                                           { "Duplicate", "StudioFieldCopy", ActionTone::Default },
                                           { "Remove", "StudioFieldTrash", ActionTone::Danger } };
-    const int        ActionFired      = ActionRow::Construct(Column, "##SourceActions", SourceActions, 3);
-    if (ActionFired >= 0)
+    ImVec4 SourceActionRects[3]{};
+    const int ActionFired = ActionRow::Construct(Column, "##SourceActions", SourceActions, 3, true, nullptr,
+                                                 ActionRowVoice::Charcoal, SourceActionRects);
+    for (int Action = 0; Action < 3; ++Action)
     {
-        char Refused[192]{};
-        if (ActionFired == 0)
+        char RectName[48]{};
+        std::snprintf(RectName, sizeof(RectName), "Inspector/SourceAction%d", Action);
+        RecordForceFieldWorkspaceRect(State, RectName, ImVec2(SourceActionRects[Action].x, SourceActionRects[Action].y),
+                                      ImVec2(SourceActionRects[Action].z, SourceActionRects[Action].w));
+    }
+    if (ActionFired == 0)
+    {
+        const double HorizontalSpan = Source.Reach == ForceFieldReachBox ? std::max(Source.HalfX, Source.HalfZ) : Source.Radius;
+        State.View.CentreX = Source.Centre[0];
+        State.View.CentreZ = -Source.Centre[2];
+        State.View.Span = std::clamp(std::max(240.0, 3.2 * std::max(HorizontalSpan, Source.Height * 0.5)), 100.0, 100000.0);
+        State.View.Follow = -1;
+        AppendForceFieldWorkspaceLog(State, "VIEW", "Framed source", Source.Name.c_str());
+        Toast::Show("Source framed in the field view");
+    }
+    else if (ActionFired == 1)
+    {
+        if (DuplicateForceFieldWorkspaceSource(State, Index))
         {
-            std::snprintf(Refused, sizeof(Refused), "Frame %s refused", Source.Name.c_str());
-            NoopForceFieldWorkspaceCommand(State, "FORCES", Refused, "Framing is a NOOP in this shell");
+            Toast::Show("Force source duplicated");
+            return; // 📝 Vector growth can invalidate the selected source reference.
         }
-        else if (ActionFired == 1)
+    }
+    else if (ActionFired == 2)
+    {
+        const std::string RemovedName = Source.Name;
+        if (RemoveForceFieldWorkspaceSource(State, Index))
         {
-            std::snprintf(Refused, sizeof(Refused), "Duplicate %s refused", Source.Name.c_str());
-            NoopForceFieldWorkspaceCommand(State, "FORCES", Refused, "Duplicating sources is a NOOP in this shell");
-        }
-        else
-        {
-            std::snprintf(Refused, sizeof(Refused), "Remove %s refused", Source.Name.c_str());
-            NoopForceFieldWorkspaceCommand(State, "FORCES", Refused, "Removing sources is a NOOP in this shell");
+            Toast::Show(("Removed " + RemovedName).c_str());
+            return; // 📝 Erasing the source invalidates the selected source reference.
         }
     }
 
@@ -1232,7 +1013,12 @@ void SourcePage(ForceFieldWorkspaceState& State, ControlColumn& Column, int Inde
         if (Source.Reach == ForceFieldReachColumn || Source.Reach == ForceFieldReachBox)
         {
             if (SliderPill::Construct(Column, "##Height", "Vertical height", Source.Height, 5.0, 15000.0, 1.0, "m", Span, true))
+            {
+                for (int Param = 0; Param < Type.ParamCount; ++Param)
+                    if (Type.Params[Param].Key != nullptr && std::strcmp(Type.Params[Param].Key, "Height") == 0)
+                        Source.Params[Param] = Source.Height;
                 LogSpan(State, "INFLUENCE", Source.Name.c_str(), "Vertical height", Source.Height);
+            }
         }
         if (Source.Reach == ForceFieldReachBox && std::strcmp(Type.Id, "Jet") != 0 && std::strcmp(Type.Id, "Wake") != 0)
         {
@@ -1282,9 +1068,14 @@ void SourcePage(ForceFieldWorkspaceState& State, ControlColumn& Column, int Inde
             Opts.Digits      = Spec.Digits;
             Opts.Logarithmic = Spec.Distance;
             Opts.Distance     = Spec.Distance;
-            if (SliderPill::Construct(Column, SliderId, Spec.Label, Source.Params[Param], Spec.Minimum, Spec.Maximum, Spec.Step,
-                                      Spec.Unit, Opts, true))
+            const bool ParamMoved = SliderPill::Construct(Column, SliderId, Spec.Label, Source.Params[Param], Spec.Minimum,
+                                                          Spec.Maximum, Spec.Step, Spec.Unit, Opts, true);
+            char ParamRect[48]{};
+            std::snprintf(ParamRect, sizeof(ParamRect), "Inspector/Param%d", Param);
+            RecordForceFieldWorkspaceRect(State, ParamRect, ImGui::GetItemRectMin(), ImGui::GetItemRectMax());
+            if (ParamMoved)
             {
+                if (Spec.Key != nullptr && std::strcmp(Spec.Key, "Height") == 0) Source.Height = Source.Params[Param];
                 if (Spec.Distance) LogSpan(State, "FORCES", Source.Name.c_str(), Spec.Label, Source.Params[Param]);
                 else LogFigure(State, "FORCES", Source.Name.c_str(), Spec.Label, Source.Params[Param], Spec.Digits, Spec.Unit);
             }
@@ -1321,12 +1112,8 @@ void SourcePage(ForceFieldWorkspaceState& State, ControlColumn& Column, int Inde
             if (Source.Activation == ForceFieldActivationTrigger)
             {
                 const ActionItem Fire[1] = { { "FIRE PULSE NOW", "StudioFieldZap", ActionTone::Accent } };
-                if (ActionRow::Construct(Column, "##Fire", Fire, 1) == 0)
-                {
-                    char Refused[192]{};
-                    std::snprintf(Refused, sizeof(Refused), "Fire %s refused", Source.Name.c_str());
-                    NoopForceFieldWorkspaceCommand(State, "TRIGGER", Refused, "Firing pulses is a NOOP in this shell");
-                }
+                if (ActionRow::Construct(Column, "##Fire", Fire, 1) == 0 && FireForceFieldWorkspaceSource(State, Index))
+                    Toast::Show("Force source fired on the timeline");
             }
         }
         const char* ChannelOptions[7] = { QueryForceFieldChannelLabel(0), QueryForceFieldChannelLabel(1),
