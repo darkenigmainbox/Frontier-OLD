@@ -131,6 +131,7 @@ add_library(FrontierSceneEditorUI STATIC
     Frontier/Engine/Scene/WorldSpace.cpp
     Frontier/Engine/Scene/GeometryLayout.cpp
     Frontier/Engine/Fracture/FracturePartition.cpp
+    Frontier/Engine/Fracture/EngineeringStressSolver.cpp
     Frontier/Engine/Diagnostics/LogCategories.cpp
     Frontier/Engine/Diagnostics/LogRingStore.cpp
     Frontier/Engine/Diagnostics/LogStream.cpp

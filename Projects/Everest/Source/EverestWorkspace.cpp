@@ -357,6 +357,7 @@ EverestWorkspace::EverestWorkspace(Frontier::ControlCentrePanel& ControlCentre,
     InitializeWorld();
     Frontier::ConstructFractureWorkspaceState(FractureStudioState);
     FractureStudioRuntime = std::make_unique<Frontier::FractureStudioRuntime>();
+    Frontier::ConstructPhotometricWorkspaceState(PhotometricStudioState);
 
     // 📝 The scene's entries plus the one Render settings component (the whole renderer, owner's request) and the scene archive's
     //    geometry objects; neither the renderer nor the geometry is constructible (the archive decides what geometry exists).
@@ -411,9 +412,14 @@ EverestWorkspace::EverestWorkspace(Frontier::ControlCentrePanel& ControlCentre,
          }},
         {"Fracture Studio", Frontier::ControlCentreIconCategory::LayersSlabs,
          [this, Token]() {
-             if (!Token.expired()) FractureStudioOpen = !FractureStudioOpen;
+             if (!Token.expired()) { FractureStudioOpen = !FractureStudioOpen; if (FractureStudioOpen) PhotometricStudioOpen = false; }
          },
          [this, Token]() { return !Token.expired() && FractureStudioOpen; }},
+        {"Photometric Studio", Frontier::ControlCentreIconCategory::SlidersQuality,
+         [this, Token]() {
+             if (!Token.expired()) { PhotometricStudioOpen = !PhotometricStudioOpen; if (PhotometricStudioOpen) FractureStudioOpen = false; }
+         },
+         [this, Token]() { return !Token.expired() && PhotometricStudioOpen; }},
     });
 
     auto OutlinerSpec=Frontier::MakeSceneDirectoryPanelSpecification(OutlinerPanel);
@@ -1035,7 +1041,16 @@ void EverestWorkspace::ConstructInterface(double DeltaSeconds)
         Navigation.Mode = SceneCameraMode::Free;
         Navigation.Up = {0, 0, 1};
     }
-    if (FractureStudioOpen)
+    if (PhotometricStudioOpen)
+    {
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape, false) && ImGui::GetTopMostPopupModal() == nullptr)
+            PhotometricStudioOpen = false;
+        if (PhotometricStudioOpen)
+            Frontier::ConstructPhotometricWorkspace(PhotometricStudioState, Frontier::EditorTypefaces::Resolve(), IO.DisplaySize,
+                                                     nullptr, PresentSceneViewport, DeltaSeconds);
+        else Dockspace.ConstructInterface(Scale);
+    }
+    else if (FractureStudioOpen)
     {
         if (ImGui::IsKeyPressed(ImGuiKey_Escape, false) && ImGui::GetTopMostPopupModal() == nullptr)
         {

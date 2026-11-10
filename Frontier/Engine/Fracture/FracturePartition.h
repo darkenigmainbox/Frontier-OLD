@@ -146,5 +146,9 @@ struct Result
 [[nodiscard]] Result Execute(const Request& Input, const Material& MaterialProperties);
 [[nodiscard]] Result Execute(const Polyhedron& BaseSolid, const Request& Input, const Material& MaterialProperties);
 [[nodiscard]] double EvaluateRayleighWaveSpeed(const Material& MaterialProperties) noexcept;
+[[nodiscard]] std::vector<Polyhedron> SolveEngineeringPartition(const Polyhedron& Base, const Metrics& BaseMetrics,
+                                                               const Request& Input, const Material& MaterialProperties,
+                                                               uint32_t Ceiling, double EnergyBudget,
+                                                               double& OutSpentEnergyJ, uint64_t& OutRandomDraws);
 
 } // namespace Frontier::Fracture
