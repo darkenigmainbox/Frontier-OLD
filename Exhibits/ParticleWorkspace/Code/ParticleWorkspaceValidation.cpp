@@ -50,11 +50,12 @@ int main(int ArgumentCount, char** Arguments)
         const EditorTypefaces Faces = EditorTypefaces::Resolve();
         ParticleWorkspaceState State{};
         ConstructParticleWorkspaceState(State);
+        AssetBrowserLink Link{};
 
         const auto Frame = [&]()
         {
             ImGui::NewFrame();
-            ConstructParticleWorkspace(State, Faces, IO.DisplaySize);
+            ConstructParticleWorkspace(State, Faces, IO.DisplaySize, &Link);
             ImGui::Render();
         };
         const auto RectCentre = [&](const char* Name)
@@ -203,20 +204,26 @@ int main(int ArgumentCount, char** Arguments)
         Click("Toolbar/Mode0");
         Confirm(State.ViewMode == 0, "The Stage pill did not switch back");
 
-        // 7. The library opens from the scene page; its 52 names are read-only.
+        // 7. The library delegates to the shared Asset Browser; the handoff refuses like the old card did.
         Click("Outliner/Scene");
         Click("Inspector/Scene/Action0");
         Confirm(State.LibraryOpen, "Open library did not open the library");
-        RectCentre("Library/Card0");
-        RectCentre("Library/Card51");
+        RectCentre("Library/Browse");
         RectCentre("Library/Close");
-        Click("Library/Card0");
-        Confirm(State.LibraryOpen, "Picking a library card closed the library");
-        Confirm(Toast::QueryVisible(), "Picking a library card raised no toast");
-        Confirm(!State.Log.empty() && State.Log.front().Channel == "LIBRARY", "Picking a library card logged no LIBRARY line");
-        Confirm(static_cast<int>(State.Effects.size()) == 4, "The NOOP library card mutated the scene");
-        Click("Library/Close");
-        Confirm(!State.LibraryOpen, "The library close key did not close the library");
+        Click("Library/Browse");
+        Confirm(!State.LibraryOpen, "The browse row did not close the library");
+        Confirm(Link.OpenRequested, "The browse row did not request the browser");
+        Confirm(Link.OpenWorkspace == AssetBrowserWorkspaceParticle, "The browse row requested the wrong workspace");
+        Link.OpenRequested = false;
+        Link.OpenWorkspace = -1;
+        std::snprintf(Link.OpenRecordId, sizeof(Link.OpenRecordId), "particle/sparks");
+        Link.OpenRecordWorkspace = AssetBrowserWorkspaceParticle;
+        Frame();
+        Frame();
+        Confirm(!Link.HasHandoff(), "The shell did not consume the handoff");
+        Confirm(Toast::QueryVisible(), "The handoff raised no toast");
+        Confirm(!State.Log.empty() && State.Log.front().Channel == "LIBRARY", "The handoff logged no LIBRARY line");
+        Confirm(static_cast<int>(State.Effects.size()) == 4, "The NOOP handoff mutated the scene");
 
         // 8. The export preview renders shell state only; downloading refuses.
         Click("Inspector/Scene/Action1");

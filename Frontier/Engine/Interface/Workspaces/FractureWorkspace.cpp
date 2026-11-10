@@ -566,28 +566,18 @@ void ConstructOutlinerPanel(FractureWorkspaceState& State, const EditorTypefaces
 //                                                    PRESET LIBRARY
 //------------------------------------------------------------------------------------------------------------------------
 
-void ConstructLibraryPanel(FractureWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Min, ImVec2 Max)
+void ConstructLibraryPanel(FractureWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Min, ImVec2 Max,
+                         AssetBrowserLink* Link)
 {
     ImDrawList* const DrawList = ImGui::GetWindowDrawList();
     DrawList->AddRectFilled(Min, Max, ResolveCssColour(0x121212FF), 22.0f);
     DrawList->AddRect(Min, Max, ResolveCssColour(0xFFFFFF0E), 22.0f, ImDrawFlags_None, 1.0f);
     PanelCursor Panel{ DrawList, &Faces, 1.0f, Min.x + 14.0f, Max.x - Min.x - 28.0f, Min.y + 12.0f };
 
-    static const char* Groups[6] = { "All", "Engineering", "Brittle", "Stone & Timber", "Voronoi", "Ductile" };
-    int                Visible   = 0;
-    for (int Index = 0; Index < QueryFracturePresetCount(); ++Index)
-    {
-        const FractureWorkspacePreset& P = QueryFracturePreset(Index);
-        const bool GroupHit = State.PresetGroup == 0 || std::strcmp(P.Group, Groups[State.PresetGroup]) == 0;
-        char       Hay[192]{};
-        std::snprintf(Hay, sizeof(Hay), "%s %s %s", P.Title, P.Material, P.Blurb);
-        if (GroupHit && QueryMatches(Hay, State.PresetQuery)) ++Visible;
-    }
-
     const ImVec2 Head = Panel.Space(24.0f);
     Panel.Text(Faces.Medium, 11.5f, Head.x, Head.y, 1.38f, ResolveCssColour(0xD8D8D8FF), "Solid & solver presets");
     char Count[16]{};
-    std::snprintf(Count, sizeof(Count), "%d", Visible);
+    std::snprintf(Count, sizeof(Count), "27");
     Panel.Text(Faces.Regular, 10.5f, Head.x + Panel.Measure(Faces.Medium, 11.5f, "Solid & solver presets") + 8.0f,
                Head.y + 1.0f, 1.4f, ResolveCssColour(0x5E5E5EFF), Count);
     const float MatrixWide = Panel.Measure(Faces.Medium, 10.5f, "Matrix ↗") + 18.0f;
@@ -598,70 +588,34 @@ void ConstructLibraryPanel(FractureWorkspaceState& State, const EditorTypefaces&
     RecordRect(State, "Library/Matrix", MatrixMin, MatrixMax);
     if (InvisibleRect("##LibraryMatrix", MatrixMin, MatrixMax)) State.MatrixOpen = true;
 
-    const ImVec2 Search = Panel.Space(32.0f, 6.0f, 6.0f);
-    ConstructSearchBox(State, Faces, DrawList, "PresetSearch", "Library/Search", Search,
-                       ImVec2(Search.x + Panel.Width, Search.y + 32.0f), "Spawn solid / recipe…", State.PresetQuery);
-
-    float FilterY = Panel.Y;
-    float FilterX = Panel.X;
-    for (int Index = 0; Index < 6; ++Index)
+    // 📝 The spawn gallery moved out to the shared Asset Browser; the panel keeps its chrome and hands off.
     {
-        const float ChipWide = Panel.Measure(Faces.Medium, 10.0f, Groups[Index]) + 20.0f;
-        if (FilterX + ChipWide > Panel.X + Panel.Width)
+        const ImVec2 Browse = Panel.Space(64.0f, 6.0f, 0.0f);
+        const ImVec2 BrowseMin(Browse.x, Browse.y);
+        const ImVec2 BrowseMax(Browse.x + Panel.Width, Browse.y + 64.0f);
+        DrawList->AddRectFilled(BrowseMin, BrowseMax, ResolveCssColour(0x1E1E1EFF), 12.0f);
+        DrawList->AddRect(BrowseMin, BrowseMax, ResolveCssColour(0xE8C27A66), 12.0f, ImDrawFlags_None, 1.0f);
+        Panel.Text(Faces.Medium, 12.5f, BrowseMin.x + 14.0f, BrowseMin.y + 9.0f, 1.35f, ResolveCssColour(0xE8C27AFF),
+                   "Browse fracture assets\u2026");
+        Panel.Text(Faces.Regular, 10.0f, BrowseMin.x + 14.0f, BrowseMin.y + 32.0f, 1.4f, ResolveCssColour(0x848484FF),
+                   "Materials \u00B7 solvers \u00B7 presets \u00B7 constructs");
+        Panel.Text(Faces.Medium, 13.0f, BrowseMax.x - 30.0f, BrowseMin.y + 19.0f, 1.35f, ResolveCssColour(0xE8C27AFF),
+                   "\u2197");
+        RecordRect(State, "Library/Browse", BrowseMin, BrowseMax);
+        if (InvisibleRect("##LibraryBrowse", BrowseMin, BrowseMax))
         {
-            FilterX = Panel.X;
-            FilterY += 30.0f;
+            if (Link != nullptr)
+            {
+                Link->OpenRequested = true;
+                Link->OpenWorkspace = AssetBrowserWorkspaceFracture;
+            }
+            else Toast::Show("The Asset Browser is not attached in this shell.");
         }
-        const ImVec2 ChipMin(FilterX, FilterY);
-        const ImVec2 ChipMax(FilterX + ChipWide, FilterY + 24.0f);
-        const bool   Active = State.PresetGroup == Index;
-        DrawList->AddRectFilled(ChipMin, ChipMax, ResolveCssColour(Active ? 0xE8C27A26 : 0x1A1A1AFF), 12.0f);
-        Panel.Text(Faces.Medium, 10.0f, ChipMin.x + 10.0f, FilterY + 12.0f - 0.5f * 10.0f * 1.38f, 1.38f,
-                   ResolveCssColour(Active ? 0xE8C27AFF : 0x848484FF), Groups[Index]);
-        char RectName[48]{};
-        std::snprintf(RectName, sizeof(RectName), "Library/PresetFilter%d", Index);
-        ImGui::PushID(500 + Index);
-        RecordRect(State, RectName, ChipMin, ChipMax);
-        if (InvisibleRect("##PresetFilter", ChipMin, ChipMax)) State.PresetGroup = Index;
-        ImGui::PopID();
-        FilterX = ChipMax.x + 6.0f;
-    }
-    Panel.Y = FilterY + 30.0f;
-
-    for (int Index = 0; Index < QueryFracturePresetCount(); ++Index)
-    {
-        const FractureWorkspacePreset& P = QueryFracturePreset(Index);
-        const bool GroupHit = State.PresetGroup == 0 || std::strcmp(P.Group, Groups[State.PresetGroup]) == 0;
-        char       Hay[192]{};
-        std::snprintf(Hay, sizeof(Hay), "%s %s %s", P.Title, P.Material, P.Blurb);
-        if (!GroupHit || !QueryMatches(Hay, State.PresetQuery)) continue;
-        const ImVec2 CardMin(Panel.X, Panel.Y);
-        const ImVec2 CardMax(Panel.X + Panel.Width, Panel.Y + 56.0f);
-        Panel.Y += 62.0f;
-        DrawList->AddRectFilled(CardMin, CardMax, ResolveCssColour(0x1E1E1EFF), 12.0f);
-        const int MatIndex = QueryFractureMaterialById(P.Material);
-        DrawList->AddCircleFilled(ImVec2(CardMin.x + 16.0f, CardMin.y + 28.0f), 6.0f,
-                                  ResolveCssColour(QueryFractureMaterial(MatIndex < 0 ? 0 : MatIndex).Exterior), 16);
-        Panel.Text(Faces.Medium, 11.5f, CardMin.x + 30.0f, CardMin.y + 7.0f, 1.38f, ResolveCssColour(0xEFEFEFFF),
-                   P.Title);
-        Panel.Text(Faces.Regular, 9.5f, CardMin.x + 30.0f, CardMin.y + 26.0f, 1.4f, ResolveCssColour(0x848484FF),
-                   P.Blurb);
-        Panel.Text(Faces.Medium, 11.0f, CardMax.x - 34.0f, CardMin.y + 20.0f, 1.38f, ResolveCssColour(0xE8C27AFF),
-                   "+ ↗");
-        char CardTag[48]{};
-        std::snprintf(CardTag, sizeof(CardTag), "Library/Card%d", Index);
-        ImGui::PushID(600 + Index);
-        RecordRect(State, CardTag, CardMin, CardMax);
-        if (InvisibleRect("##PresetCard", CardMin, CardMax))
-        {
-            char Message[128]{};
-            std::snprintf(Message, sizeof(Message), "Spawn %s refused", P.Title);
-            NoopFractureWorkspaceCommand(State, "SPAWN", Message, "Spawning solids is a NOOP in this shell");
-        }
-        ImGui::PopID();
     }
 }
 
+//------------------------------------------------------------------------------------------------------------------------
+//                                                    VIEWPORT BAR + STAGE
 //------------------------------------------------------------------------------------------------------------------------
 //                                                    VIEWPORT BAR + STAGE
 //------------------------------------------------------------------------------------------------------------------------
@@ -1181,8 +1135,109 @@ void ConstructSolverMatrix(FractureWorkspaceState& State, const EditorTypefaces&
 //                                                    ROOT
 //------------------------------------------------------------------------------------------------------------------------
 
-void ConstructFractureWorkspace(FractureWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Size)
+void ApplyFractureWorkspaceLink(FractureWorkspaceState& State, AssetBrowserLink* Link)
 {
+    if (Link == nullptr || !Link->HasHandoff() || Link->OpenRecordWorkspace != AssetBrowserWorkspaceFracture) return;
+    static constexpr const char* MatPrefix    = "fracture-mat/";
+    static constexpr const char* SolverPrefix = "fracture-solver/";
+    static constexpr const char* SeedPrefix   = "fracture/construct-";
+    static constexpr const char* PresetPrefix = "fracture/";
+    const char*                  Raw          = Link->OpenRecordId;
+    FractureWorkspaceConstruct&  Cst          = State.Constructs[State.ActiveConstruct];
+    if (std::strncmp(Raw, MatPrefix, std::strlen(MatPrefix)) == 0)
+    {
+        const int Mat = QueryFractureMaterialById(Raw + std::strlen(MatPrefix));
+        if (Mat >= 0)
+        {
+            Cst.Spec.Material = Mat;
+            RecomputeFractureReceipt(Cst);
+            char Message[160]{};
+            std::snprintf(Message, sizeof(Message), "Material \u201C%s\u201D applied from the Asset Browser",
+                          QueryFractureMaterial(Mat).Label);
+            AppendFractureWorkspaceLog(State, "FRACTURE", Message, Cst.Title.c_str());
+        }
+        else
+        {
+            char Message[192]{};
+            std::snprintf(Message, sizeof(Message), "Asset \u201C%s\u201D is not a fracture material", Raw);
+            AppendFractureWorkspaceLog(State, "FRACTURE", Message);
+        }
+    }
+    else if (std::strncmp(Raw, SolverPrefix, std::strlen(SolverPrefix)) == 0)
+    {
+        const int Solver = QueryFractureSolverById(Raw + std::strlen(SolverPrefix));
+        if (Solver >= 0)
+        {
+            // 📝 The handoff applies exactly like the solver-matrix row did.
+            Cst.Spec.Solver = Solver;
+            RecomputeFractureReceipt(Cst);
+            LogFractureWorkspaceValue(State, "PARAM", "Matrix solver", QueryFractureSolver(Solver).Id);
+            State.MatrixOpen = false;
+        }
+        else
+        {
+            char Message[192]{};
+            std::snprintf(Message, sizeof(Message), "Asset \u201C%s\u201D is not a fracture solver", Raw);
+            AppendFractureWorkspaceLog(State, "FRACTURE", Message);
+        }
+    }
+    else if (std::strncmp(Raw, SeedPrefix, std::strlen(SeedPrefix)) == 0)
+    {
+        int Seed = -1;
+        for (int I = 0; I < QueryFractureConstructSeedCount(); ++I)
+            if (std::strcmp(QueryFractureConstructSeed(I).Id, Raw + std::strlen(PresetPrefix)) == 0) Seed = I;
+        if (Seed >= 0)
+        {
+            SelectFractureWorkspaceNode(State, Seed);
+            char Message[160]{};
+            std::snprintf(Message, sizeof(Message), "Construct \u201C%s\u201D opened from the Asset Browser",
+                          State.Constructs[Seed].Title.c_str());
+            AppendFractureWorkspaceLog(State, "FRACTURE", Message);
+        }
+        else
+        {
+            char Message[192]{};
+            std::snprintf(Message, sizeof(Message), "Asset \u201C%s\u201D is not a fracture construct", Raw);
+            AppendFractureWorkspaceLog(State, "FRACTURE", Message);
+        }
+    }
+    else if (std::strncmp(Raw, PresetPrefix, std::strlen(PresetPrefix)) == 0)
+    {
+        int Found = -1;
+        for (int I = 0; I < QueryFracturePresetCount(); ++I)
+        {
+            const FractureWorkspacePreset& P = QueryFracturePreset(I);
+            char Composite[96]{};
+            std::snprintf(Composite, sizeof(Composite), "%s-%s", P.Category, P.Material);
+            if (std::strcmp(Composite, Raw + std::strlen(PresetPrefix)) == 0) Found = I;
+        }
+        if (Found >= 0)
+        {
+            // 📝 The handoff refuses exactly like the old spawn card did.
+            char Message[160]{};
+            std::snprintf(Message, sizeof(Message), "Spawn %s refused", QueryFracturePreset(Found).Title);
+            NoopFractureWorkspaceCommand(State, "SPAWN", Message, "Spawning solids is a NOOP in this shell");
+        }
+        else
+        {
+            char Message[192]{};
+            std::snprintf(Message, sizeof(Message), "Asset \u201C%s\u201D not found in the spawn catalogue", Raw);
+            AppendFractureWorkspaceLog(State, "FRACTURE", Message);
+        }
+    }
+    else
+    {
+        char Message[192]{};
+        std::snprintf(Message, sizeof(Message), "Asset \u201C%s\u201D is not a fracture asset", Raw);
+        AppendFractureWorkspaceLog(State, "FRACTURE", Message);
+    }
+    Link->ClearHandoff();
+}
+
+void ConstructFractureWorkspace(FractureWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Size,
+                                AssetBrowserLink* Link)
+{
+    ApplyFractureWorkspaceLink(State, Link);
     State.Rects.clear();
     ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
     ImGui::SetNextWindowSize(Size);
@@ -1218,7 +1273,7 @@ void ConstructFractureWorkspace(FractureWorkspaceState& State, const EditorTypef
     if (OutlinerTall < 420.0f) OutlinerTall = 420.0f;
     if (OutlinerTall > 780.0f) OutlinerTall = 780.0f;
     ConstructOutlinerPanel(State, Faces, RailMin, ImVec2(RailMax.x, RailMin.y + OutlinerTall));
-    ConstructLibraryPanel(State, Faces, ImVec2(RailMin.x, RailMin.y + OutlinerTall + 10.0f), RailMax);
+    ConstructLibraryPanel(State, Faces, ImVec2(RailMin.x, RailMin.y + OutlinerTall + 10.0f), RailMax, Link);
 
     // 📝 Centre column: viewport panel plus the optional 156 px log drawer.
     const float LogTall = State.LogOpen ? 156.0f : 0.0f;

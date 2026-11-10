@@ -457,98 +457,42 @@ void ConstructOutlinerPanel(FluidWorkspaceState& State, const EditorTypefaces& F
 //                                                    PRESET LIBRARY
 //------------------------------------------------------------------------------------------------------------------------
 
-void ConstructLibraryPanel(FluidWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Min, ImVec2 Max)
+void ConstructLibraryPanel(FluidWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Min, ImVec2 Max,
+                         AssetBrowserLink* Link)
 {
     ImDrawList* const DrawList = ImGui::GetWindowDrawList();
     DrawList->AddRectFilled(Min, Max, ResolveCssColour(0x121212FF), 22.0f);
     DrawList->AddRect(Min, Max, ResolveCssColour(0xFFFFFF0E), 22.0f, ImDrawFlags_None, 1.0f);
     PanelCursor Panel{ DrawList, &Faces, 1.0f, Min.x + 14.0f, Max.x - Min.x - 28.0f, Min.y + 12.0f };
 
-    static const char* FilterTags[4] = { nullptr, "fire", "smoke", "blast" };
-    int Visible                      = 0;
-    for (int Index = 0; Index < QueryFluidPresetCount(); ++Index)
-    {
-        const FluidWorkspacePreset& Info = QueryFluidPreset(Index);
-        if (State.LibraryFilter != FluidWorkspaceState::FilterAll && std::strcmp(Info.Group, FilterTags[State.LibraryFilter]) != 0)
-            continue;
-        if (!QueryMatches(Info.Name, State.LibraryQuery) && !QueryMatches(Info.Blurb, State.LibraryQuery)) continue;
-        ++Visible;
-    }
+    // 📝 The 18-row plume gallery moved out to the shared Asset Browser; the panel keeps its chrome and hands off.
     char Heading[48]{};
-    if (Visible == QueryFluidPresetCount()) std::snprintf(Heading, sizeof(Heading), "Plume Library · %d presets", Visible);
-    else std::snprintf(Heading, sizeof(Heading), "Plume Library · %d of %d", Visible, QueryFluidPresetCount());
+    std::snprintf(Heading, sizeof(Heading), "Plume Library \u00B7 %d presets", QueryFluidPresetCount());
     const ImVec2 Head = Panel.Space(22.0f);
     Panel.Text(Faces.Light, 13.5f, Head.x, Head.y, 1.4f, ResolveCssColour(0xDADADADA), Heading, -0.2f);
-
-    const ImVec2 Search = Panel.Space(30.0f, 8.0f, 8.0f);
-    ConstructSearchBox(State, Faces, DrawList, "LibrarySearch", "Library/Search", ImVec2(Search.x, Search.y),
-                       ImVec2(Search.x + Panel.Width, Search.y + 30.0f), "Search presets…", State.LibraryQuery);
-
-    static const char* Filters[4] = { "All", "Fire", "Smoke", "Blast" };
-    const ImVec2 FilterRow        = Panel.Space(26.0f, 0.0f, 8.0f);
-    float FilterX                 = FilterRow.x;
-    for (int Index = 0; Index < 4; ++Index)
     {
-        const float ChipWide = Panel.Measure(Faces.Medium, 10.5f, Filters[Index]) + 20.0f;
-        const ImVec2 ChipMin(FilterX, FilterRow.y);
-        const ImVec2 ChipMax(ChipMin.x + ChipWide, FilterRow.y + 26.0f);
-        const bool Active = State.LibraryFilter == Index;
-        DrawList->AddRectFilled(ChipMin, ChipMax, ResolveCssColour(Active ? 0xE8C27AFF : 0x1A1A1AFF), 13.0f);
-        Panel.Text(Faces.Medium, 10.5f, ChipMin.x + 10.0f, FilterRow.y + 13.0f - 0.5f * 10.5f * 1.38f, 1.38f,
-                   ResolveCssColour(Active ? 0x1A1A1AFF : 0xBCBCBCFF), Filters[Index]);
-        ImGui::PushID(200 + Index);
-        char RectName[48]{};
-        std::snprintf(RectName, sizeof(RectName), "Library/Filter%d", Index);
-        RecordRect(State, RectName, ChipMin, ChipMax);
-        if (InvisibleRect("##PresetFilter", ChipMin, ChipMax)) State.LibraryFilter = Index;
-        ImGui::PopID();
-        FilterX = ChipMax.x + 6.0f;
-    }
-
-    const float ListTop = Panel.Y;
-    ImGui::SetCursorScreenPos(ImVec2(Min.x + 8.0f, ListTop));
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
-    ImGui::BeginChild("##LibraryList", ImVec2(Max.x - Min.x - 16.0f, Max.y - ListTop - 10.0f), false);
-    ImDrawList* const InnerList = ImGui::GetWindowDrawList();
-    PanelCursor       Content{ InnerList, &Faces, 1.0f, Min.x + 14.0f, Max.x - Min.x - 28.0f, ListTop + 2.0f };
-    for (int Index = 0; Index < QueryFluidPresetCount(); ++Index)
-    {
-        const FluidWorkspacePreset& Info = QueryFluidPreset(Index);
-        if (State.LibraryFilter != FluidWorkspaceState::FilterAll && std::strcmp(Info.Group, FilterTags[State.LibraryFilter]) != 0)
-            continue;
-        if (!QueryMatches(Info.Name, State.LibraryQuery) && !QueryMatches(Info.Blurb, State.LibraryQuery)) continue;
-        const ImVec2 Row = Content.Space(52.0f, 0.0f, 6.0f);
-        const ImVec2 CardMin(Row.x, Row.y);
-        const ImVec2 CardMax(Row.x + Content.Width, Row.y + 52.0f);
-        InnerList->AddRectFilled(CardMin, CardMax, ResolveCssColour(0x1A1A1AFF), 12.0f);
-        InnerList->AddRect(CardMin, CardMax, ResolveCssColour(0xFFFFFF0C), 12.0f, ImDrawFlags_None, 1.0f);
-        const ImU32 Accent = ResolveCssColour(Info.Colour);
-        InnerList->AddRectFilled(ImVec2(CardMin.x + 8.0f, CardMin.y + 12.0f), ImVec2(CardMin.x + 32.0f, CardMin.y + 36.0f),
-                                 ResolveAlpha(Accent, 0.16f), 7.0f);
-        (void)GlyphSymbol::Construct(InnerList, Info.Glyph, ImVec2(CardMin.x + 13.0f, CardMin.y + 17.0f), 11.0f, 1.8f, Accent);
-        Content.Text(Faces.Medium, 12.0f, CardMin.x + 40.0f, CardMin.y + 6.0f, 1.3f, ResolveCssColour(0xEFEFEFFF), Info.Name);
-        Content.Text(Faces.Regular, 10.0f, CardMin.x + 40.0f, CardMin.y + 25.0f, 1.4f, ResolveCssColour(0x848484FF), Info.Blurb);
-        ImGui::PushID(Index);
-        char RectName[48]{};
-        std::snprintf(RectName, sizeof(RectName), "Library/Card%d", Index);
-        RecordRect(State, RectName, CardMin, CardMax);
-        if (InvisibleRect("##PresetCard", CardMin, CardMax))
+        const ImVec2 Browse = Panel.Space(64.0f, 8.0f, 0.0f);
+        const ImVec2 BrowseMin(Browse.x, Browse.y);
+        const ImVec2 BrowseMax(Browse.x + Panel.Width, Browse.y + 64.0f);
+        DrawList->AddRectFilled(BrowseMin, BrowseMax, ResolveCssColour(0x1A1A1AFF), 14.0f);
+        DrawList->AddRect(BrowseMin, BrowseMax, ResolveCssColour(0xE8C27A66), 14.0f, ImDrawFlags_None, 1.0f);
+        Panel.Text(Faces.Medium, 12.5f, BrowseMin.x + 14.0f, BrowseMin.y + 9.0f, 1.3f, ResolveCssColour(0xE8C27AFF),
+                   "Browse plume presets\u2026");
+        Panel.Text(Faces.Regular, 10.0f, BrowseMin.x + 14.0f, BrowseMin.y + 33.0f, 1.4f, ResolveCssColour(0x848484FF),
+                   "18 presets \u00B7 opens the shared Asset Browser");
+        Panel.Text(Faces.Medium, 13.0f, BrowseMax.x - 30.0f, BrowseMin.y + 19.0f, 1.3f, ResolveCssColour(0xE8C27AFF),
+                   "\u2197");
+        RecordRect(State, "Library/Browse", BrowseMin, BrowseMax);
+        if (InvisibleRect("##LibraryBrowse", BrowseMin, BrowseMax))
         {
-            char Message[128]{};
-            std::snprintf(Message, sizeof(Message), "Stage %s refused", Info.Name);
-            NoopFluidWorkspaceCommand(State, "LIBRARY", Message, "The library is read-only in this shell");
+            if (Link != nullptr)
+            {
+                Link->OpenRequested = true;
+                Link->OpenWorkspace = AssetBrowserWorkspaceFluid;
+            }
+            else Toast::Show("The Asset Browser is not attached in this shell.");
         }
-        ImGui::PopID();
     }
-    if (Visible == 0)
-    {
-        const ImVec2 Empty = Content.Space(20.0f, 4.0f, 0.0f);
-        Content.Text(Faces.Regular, 11.0f, Empty.x, Empty.y, 1.4f, ResolveCssColour(0x5E5E5EFF), "No matching presets.");
-    }
-    ImGui::SetCursorScreenPos(ImVec2(Content.X, Content.Y));
-    ImGui::Dummy(ImVec2(1.0f, 1.0f));
-    ImGui::EndChild();
-    ImGui::PopStyleColor();
 }
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -1153,8 +1097,28 @@ void RecordFluidWorkspaceRect(FluidWorkspaceState& State, const char* Name, ImVe
     RecordRect(State, Name, Min, Max);
 }
 
-void ConstructFluidWorkspace(FluidWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Size)
+void ApplyFluidWorkspaceLink(FluidWorkspaceState& State, AssetBrowserLink* Link)
 {
+    if (Link == nullptr || !Link->HasHandoff() || Link->OpenRecordWorkspace != AssetBrowserWorkspaceFluid) return;
+    static constexpr const char* Prefix  = "fluid/";
+    const char*                  Raw     = Link->OpenRecordId;
+    const char*                  Display = Raw;
+    if (std::strncmp(Raw, Prefix, std::strlen(Prefix)) == 0)
+    {
+        const int Preset = QueryFluidPresetById(Raw + std::strlen(Prefix));
+        if (Preset >= 0) Display = QueryFluidPreset(Preset).Name;
+    }
+    // 📝 Read-only names: the handoff refuses exactly like the old library card did.
+    char Message[192]{};
+    std::snprintf(Message, sizeof(Message), "Stage %s refused", Display);
+    NoopFluidWorkspaceCommand(State, "LIBRARY", Message, "The library is read-only in this shell");
+    Link->ClearHandoff();
+}
+
+void ConstructFluidWorkspace(FluidWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Size,
+                             AssetBrowserLink* Link)
+{
+    ApplyFluidWorkspaceLink(State, Link);
     State.Rects.clear();
 
     // 📝 The speed select mirrors the staged time scale; the Simulation slider wins ties by nearest standard speed.
@@ -1207,7 +1171,7 @@ void ConstructFluidWorkspace(FluidWorkspaceState& State, const EditorTypefaces& 
     // 📝 Left rail: outliner above, preset library below.
     const float OutlinerTall = 446.0f;
     ConstructOutlinerPanel(State, Faces, RailMin, ImVec2(RailMax.x, RailMin.y + OutlinerTall));
-    ConstructLibraryPanel(State, Faces, ImVec2(RailMin.x, RailMin.y + OutlinerTall + 10.0f), RailMax);
+    ConstructLibraryPanel(State, Faces, ImVec2(RailMin.x, RailMin.y + OutlinerTall + 10.0f), RailMax, Link);
 
     // 📝 Centre column: viewport panel plus the optional 156 px log drawer.
     const float LogTall = State.LogOpen ? 156.0f : 0.0f;

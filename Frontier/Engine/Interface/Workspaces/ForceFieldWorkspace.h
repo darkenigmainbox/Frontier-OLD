@@ -10,6 +10,8 @@
 
 #pragma once
 
+#include "Frontier/Engine/Interface/Workspaces/AssetBrowserWorkspace.h"
+
 #include <imgui.h>
 
 #include <cstdint>
@@ -239,7 +241,9 @@ void        FormatForceFieldSpan(double Metres, char* Text, size_t TextSize) noe
 void        FormatForceFieldTrimmed(double Value, int Digits, char* Text, size_t TextSize) noexcept; // 🧩 Number(Value.toFixed(Digits)).
 [[nodiscard]] bool QueryForceFieldWorkspaceRect(const ForceFieldWorkspaceState& State, const char* Name, ImVec2& Min, ImVec2& Max) noexcept;
 
-void ConstructForceFieldWorkspace(ForceFieldWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Size);
+void ApplyForceFieldWorkspaceLink(ForceFieldWorkspaceState& State, AssetBrowserLink* Link); // 🧩 forcefield/<id> → arm placement.
+void ConstructForceFieldWorkspace(ForceFieldWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Size,
+                                  AssetBrowserLink* Link = nullptr);
 
 class ControlColumn;
 void ConstructForceFieldWorkspaceInspector(ForceFieldWorkspaceState& State, const EditorTypefaces& Faces, ControlColumn& Column);

@@ -14,6 +14,7 @@
 #pragma once
 
 #include "Frontier/Engine/PhysicalDynamics/ParticleDynamics/ParticleEffectLibrary.h"
+#include "Frontier/Engine/Interface/Workspaces/AssetBrowserWorkspace.h"
 
 #include <imgui.h>
 
@@ -176,7 +177,9 @@ void        FormatParticleTrimmed(double Value, int Digits, char* Text, size_t T
 void        FormatParticleSpan(double Metres, char* Text, size_t TextSize) noexcept; // 🧩 \"245 m\" / \"1.40 km\".
 [[nodiscard]] bool QueryParticleWorkspaceRect(const ParticleWorkspaceState& State, const char* Name, ImVec2& Min, ImVec2& Max) noexcept;
 
-void ConstructParticleWorkspace(ParticleWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Size);
+void        ApplyParticleWorkspaceLink(ParticleWorkspaceState& State, AssetBrowserLink* Link); // 🧩 particle/<id> → old card refusal.
+void ConstructParticleWorkspace(ParticleWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Size,
+                                AssetBrowserLink* Link = nullptr);
 
 class ControlColumn;
 void ConstructParticleWorkspaceInspector(ParticleWorkspaceState& State, const EditorTypefaces& Faces, ControlColumn& Column);

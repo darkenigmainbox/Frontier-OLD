@@ -18,6 +18,8 @@
 
 #pragma once
 
+#include "Frontier/Engine/Interface/Workspaces/AssetBrowserWorkspace.h"
+
 #include <imgui.h>
 
 #include <deque>
@@ -315,7 +317,9 @@ void        RecordUvWorkspaceRect(UvWorkspaceState& State, const char* Name, ImV
 [[nodiscard]] bool QueryUvWorkspaceRect(const UvWorkspaceState& State, const char* Name, ImVec2& Min,
                                         ImVec2& Max) noexcept;
 
-void ConstructUvWorkspace(UvWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Size);
+void ApplyUvWorkspaceLink(UvWorkspaceState& State, AssetBrowserLink* Link); // 🧩 uv/<id> → old tab restage.
+void ConstructUvWorkspace(UvWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Size,
+                          AssetBrowserLink* Link = nullptr);
 
 class ControlColumn;
 void ConstructUvWorkspaceInspector(UvWorkspaceState& State, const EditorTypefaces& Faces, ControlColumn& Column);

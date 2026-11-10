@@ -54,11 +54,12 @@ int main(int ArgumentCount, char** Arguments)
         const EditorTypefaces Faces = EditorTypefaces::Resolve();
         PhotometricWorkspaceState State{};
         ConstructPhotometricWorkspaceState(State);
+        AssetBrowserLink Link{};
 
         const auto Frame = [&]()
         {
             ImGui::NewFrame();
-            ConstructPhotometricWorkspace(State, Faces, IO.DisplaySize);
+            ConstructPhotometricWorkspace(State, Faces, IO.DisplaySize, &Link);
             ImGui::Render();
         };
         const auto RectCentre = [&](const char* Name)
@@ -206,29 +207,42 @@ int main(int ArgumentCount, char** Arguments)
         }
         Click("Outliner/Light0");
 
-        // 7. Quick photometry: the moon chip swaps the rig, the isolux chip toggles the lens.
-        Click("Quick/Chip3");
-        Confirm(State.Scenario == PhotometricWorkspaceState::ScenarioLunar, "The night-moon chip missed the lunar rig");
+        // 7. Quick photometry: the browse chip requests the browser, the isolux chip toggles the lens.
         Click("Quick/Chip0");
-        Confirm(State.Scenario == PhotometricWorkspaceState::ScenarioRoadway, "The low-beam chip missed the roadway rig");
-        Click("Quick/Chip4");
+        Confirm(Link.OpenRequested, "The browse chip did not request the browser");
+        Confirm(Link.OpenWorkspace == AssetBrowserWorkspacePhotometric, "The browse chip requested the wrong workspace");
+        Link.OpenRequested = false;
+        Link.OpenWorkspace = -1;
+        Click("Quick/Chip1");
         Confirm(State.Lens == PhotometricWorkspaceState::LensLux, "The isolux chip did not engage the lux lens");
-        Click("Quick/Chip4");
+        Click("Quick/Chip1");
         Confirm(State.Lens == PhotometricWorkspaceState::LensPbr, "The isolux chip did not restore the PBR lens");
+        const auto HandOff = [&](const char* Id)
+        {
+            std::snprintf(Link.OpenRecordId, sizeof(Link.OpenRecordId), "%s", Id);
+            Link.OpenRecordWorkspace = AssetBrowserWorkspacePhotometric;
+            Frame();
+            Frame();
+            Confirm(!Link.HasHandoff(), "The shell did not consume the handoff");
+        };
 
-        // 8. Add drawer: every type key refuses with a NOOP and leaves the rig at eight luminaires.
+        // 8. Add drawer: browsing delegates to the browser; light handoffs refuse and leave eight luminaires.
         Click("Outliner/Add");
         Confirm(State.AddDrawerOpen, "The add key did not open the drawer");
+        RectCentre("AddDrawer/Browse");
+        Click("AddDrawer/Browse");
+        Confirm(!State.AddDrawerOpen, "The browse row did not dismiss the drawer");
+        Confirm(Link.OpenRequested, "The drawer browse row did not request the browser");
+        Link.OpenRequested = false;
+        Link.OpenWorkspace = -1;
         {
             const int NoopsBefore = State.NoopCount;
-            Click("AddDrawer/Type2");
+            HandOff("photo-light/ieslight");
             Confirm(State.NoopCount == NoopsBefore + 1, "Adding an IES light did not NOOP");
-            Click("AddDrawer/Type5");
+            HandOff("photo-light/ledlight");
             Confirm(State.NoopCount == NoopsBefore + 2, "Adding an LED did not NOOP");
             Confirm(State.Log.front().Channel == "ADD", "The add refusal missed its ADD channel");
         }
-        Click("AddDrawer/Close");
-        Confirm(!State.AddDrawerOpen, "The drawer close key did not dismiss the drawer");
 
         // 9. Transport: play, step, and reset drive the diurnal clock and the ephemeris follows.
         Click("Transport/Play");
@@ -285,18 +299,28 @@ int main(int ArgumentCount, char** Arguments)
         Click("Matrix/Close");
         Confirm(!State.MatrixOpen, "The matrix close key did not dismiss the sheet");
 
-        // 13. IES matrix: measured and synthetic tiles re-curve the selected IES light.
+        // 13. IES matrix: browsing delegates to the browser; rig, moon, and IES handoffs apply.
+        Click("TopBar/Goniometer");
+        Confirm(State.MatrixOpen, "The goniometer key did not open the matrix");
+        RectCentre("Matrix/Browse");
+        Click("Matrix/Browse");
+        Confirm(!State.MatrixOpen, "The browse row did not dismiss the sheet");
+        Confirm(Link.OpenRequested, "The matrix browse row did not request the browser");
+        Link.OpenRequested = false;
+        Link.OpenWorkspace = -1;
+        HandOff("photo-rig/lunar");
+        Confirm(State.Scenario == PhotometricWorkspaceState::ScenarioLunar, "The rig handoff missed the lunar rig");
+        HandOff("photo-moon/Ember");
+        Confirm(State.Moon.Slot == 1, "The moon handoff did not stage Ember");
+        Confirm(State.Log.front().Channel == "MOON", "The moon handoff logged no MOON line");
         Click("Outliner/Light0");
-        Click("TopBar/Goniometer");
-        Click("Matrix/Tile1");
-        Confirm(!State.MatrixOpen, "The HighBeam tile did not dismiss the sheet");
-        Confirm(State.Lights[0].Props.UseMeasuredIes, "The HighBeam tile did not stage a measured curve");
-        Confirm(State.Lights[0].Props.MeasuredProfile == 1, "The HighBeam tile missed profile 1");
+        HandOff("photo-ies-m/HighBeam");
+        Confirm(State.Lights[0].Props.UseMeasuredIes, "The HighBeam handoff did not stage a measured curve");
+        Confirm(State.Lights[0].Props.MeasuredProfile == 1, "The HighBeam handoff missed profile 1");
         Confirm(State.Log.front().Channel == "IES", "The curve assignment missed its IES channel");
-        Click("TopBar/Goniometer");
-        Click("Matrix/Tile9");
-        Confirm(!State.Lights[0].Props.UseMeasuredIes, "The Batwing tile did not stage a synthetic curve");
-        Confirm(State.Lights[0].Props.PresetProfile == 2, "The Batwing tile missed preset 2");
+        HandOff("photo-ies-p/Batwing");
+        Confirm(!State.Lights[0].Props.UseMeasuredIes, "The Batwing handoff did not stage a synthetic curve");
+        Confirm(State.Lights[0].Props.PresetProfile == 2, "The Batwing handoff missed preset 2");
         Click("TopBar/Rig0");
 
         // 14. Evidence: one frame per showcase state.

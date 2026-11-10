@@ -15,6 +15,8 @@
 
 #pragma once
 
+#include "Frontier/Engine/Interface/Workspaces/AssetBrowserWorkspace.h"
+
 #include <imgui.h>
 
 #include <deque>
@@ -338,7 +340,9 @@ void        RecordPhotometricWorkspaceRect(PhotometricWorkspaceState& State, con
 [[nodiscard]] bool QueryPhotometricWorkspaceRect(const PhotometricWorkspaceState& State, const char* Name, ImVec2& Min,
                                                 ImVec2& Max) noexcept;
 
-void ConstructPhotometricWorkspace(PhotometricWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Size);
+void ApplyPhotometricWorkspaceLink(PhotometricWorkspaceState& State, AssetBrowserLink* Link); // 🧩 photo-<group>/<id>.
+void ConstructPhotometricWorkspace(PhotometricWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Size,
+                                   AssetBrowserLink* Link = nullptr);
 
 class ControlColumn;
 void ConstructPhotometricWorkspaceInspector(PhotometricWorkspaceState& State, const EditorTypefaces& Faces,

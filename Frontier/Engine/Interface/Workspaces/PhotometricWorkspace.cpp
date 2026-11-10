@@ -227,7 +227,8 @@ void ConstructTopBar(PhotometricWorkspaceState& State, PanelCursor& Root)
 //                                                    OUTLINER
 //------------------------------------------------------------------------------------------------------------------------
 
-void ConstructOutlinerPanel(PhotometricWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Min, ImVec2 Max)
+void ConstructOutlinerPanel(PhotometricWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Min, ImVec2 Max,
+                          AssetBrowserLink* Link)
 {
     ImDrawList* const DrawList = ImGui::GetWindowDrawList();
     DrawList->AddRectFilled(Min, Max, ResolveCssColour(0x121212FF), 22.0f);
@@ -383,9 +384,10 @@ void ConstructOutlinerPanel(PhotometricWorkspaceState& State, const EditorTypefa
     const ImVec2 QuickHead = Panel.Space(20.0f, 6.0f, 4.0f);
     Panel.Text(Faces.SemiBold, 9.5f, QuickHead.x, QuickHead.y, 1.4f, ResolveCssColour(0x848484FF), "QUICK PHOTOMETRY",
                0.9f);
-    static const char* Chips[5] = { "ECE Low Beam", "High Beam", "Batwing Wash", "Night Moon", "Isolux Scan" };
+    // 📝 The scenario/curve shortcut chips moved out to the shared Asset Browser; the lux lens toggle stays local.
+    static const char* Chips[2] = { "Browse light assets\u2026", "Isolux Scan" };
     float              ChipX = Panel.X, ChipY = Panel.Y;
-    for (int I = 0; I < 5; ++I)
+    for (int I = 0; I < 2; ++I)
     {
         const float ChipWide = Panel.Measure(Faces.Medium, 10.0f, Chips[I]) + 20.0f;
         if (ChipX + ChipWide > Panel.X + Panel.Width)
@@ -404,42 +406,19 @@ void ConstructOutlinerPanel(PhotometricWorkspaceState& State, const EditorTypefa
         RecordRect(State, ChipTag, ChipMin, ChipMax);
         if (InvisibleRect("##QuickChip", ChipMin, ChipMax))
         {
-            if (I == 0) ApplyPhotometricScenario(State, PhotometricWorkspaceState::ScenarioRoadway);
-            else if (I == 3) ApplyPhotometricScenario(State, PhotometricWorkspaceState::ScenarioLunar);
-            else if (I == 4)
+            if (I == 0)
+            {
+                if (Link != nullptr)
+                {
+                    Link->OpenRequested = true;
+                    Link->OpenWorkspace = AssetBrowserWorkspacePhotometric;
+                }
+                else Toast::Show("The Asset Browser is not attached in this shell.");
+            }
+            else
                 State.Lens = State.Lens == PhotometricWorkspaceState::LensLux
                                  ? PhotometricWorkspaceState::LensPbr
                                  : PhotometricWorkspaceState::LensLux;
-            else
-            {
-                int Target = -1;
-                if (State.Selected >= 0 && State.Selected < 8 && State.Lights[State.Selected].Type == 2)
-                    Target = State.Selected;
-                else
-                    for (int L = 0; L < 8; ++L)
-                        if (State.Lights[L].Type == 2)
-                        {
-                            Target = L;
-                            break;
-                        }
-                if (Target >= 0)
-                {
-                    if (I == 1)
-                    {
-                        State.Lights[Target].Props.UseMeasuredIes  = true;
-                        State.Lights[Target].Props.MeasuredProfile = 1;
-                    }
-                    else
-                    {
-                        State.Lights[Target].Props.UseMeasuredIes = false;
-                        State.Lights[Target].Props.PresetProfile  = 2;
-                    }
-                    SelectPhotometricWorkspaceNode(State, Target);
-                    char Message[96]{};
-                    std::snprintf(Message, sizeof(Message), "Quick photometry \"%s\" staged", Chips[I]);
-                    AppendPhotometricWorkspaceLog(State, "IES", Message);
-                }
-            }
         }
         ImGui::PopID();
         ChipX = ChipMax.x + 6.0f;
@@ -451,7 +430,8 @@ void ConstructOutlinerPanel(PhotometricWorkspaceState& State, const EditorTypefa
 //                                                    ADD-LIGHT DRAWER
 //------------------------------------------------------------------------------------------------------------------------
 
-void ConstructAddDrawer(PhotometricWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 RailMin, float RailWide)
+void ConstructAddDrawer(PhotometricWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 RailMin, float RailWide,
+                      AssetBrowserLink* Link)
 {
     if (!State.AddDrawerOpen) return;
     ImDrawList* const DrawList = ImGui::GetWindowDrawList();
@@ -476,28 +456,28 @@ void ConstructAddDrawer(PhotometricWorkspaceState& State, const EditorTypefaces&
     RecordRect(State, "AddDrawer/Close", CloseMin, CloseMax);
     if (InvisibleRect("##AddClose", CloseMin, CloseMax)) State.AddDrawerOpen = false;
 
-    for (int I = 0; I < 7; ++I)
+    // 📝 Luminaire browsing moved out to the shared Asset Browser; the drawer keeps its chrome and hands off.
     {
-        const PhotometricLightSpec& Spec = QueryPhotometricLightSpec(I);
-        const ImVec2 KeyMin(Panel.X, Panel.Y);
-        const ImVec2 KeyMax(Panel.X + Panel.Width, Panel.Y + 30.0f);
-        Panel.Y += 34.0f;
-        DrawList->AddRectFilled(KeyMin, KeyMax, ResolveCssColour(0x1E1E1EFF), 10.0f);
-        DrawList->AddCircleFilled(ImVec2(KeyMin.x + 14.0f, KeyMin.y + 15.0f), 4.0f,
-                                  ResolveCssColour(Spec.Accent), 12);
-        Panel.Text(Faces.Medium, 11.0f, KeyMin.x + 26.0f, KeyMin.y + 15.0f - 0.5f * 11.0f * 1.38f, 1.38f,
-                   ResolveCssColour(0xD8D8D8FF), Spec.Label);
-        char TypeTag[40]{};
-        std::snprintf(TypeTag, sizeof(TypeTag), "AddDrawer/Type%d", I);
-        ImGui::PushID(650 + I);
-        RecordRect(State, TypeTag, KeyMin, KeyMax);
-        if (InvisibleRect("##AddType", KeyMin, KeyMax))
+        const ImVec2 BrowseMin(Panel.X, Panel.Y);
+        const ImVec2 BrowseMax(Panel.X + Panel.Width, Panel.Y + 56.0f);
+        Panel.Y += 60.0f;
+        DrawList->AddRectFilled(BrowseMin, BrowseMax, ResolveCssColour(0x1E1E1EFF), 10.0f);
+        DrawList->AddRect(BrowseMin, BrowseMax, ResolveCssColour(0xE8C27A66), 10.0f, ImDrawFlags_None, 1.0f);
+        Panel.Text(Faces.Medium, 11.5f, BrowseMin.x + 12.0f, BrowseMin.y + 8.0f, 1.38f, ResolveCssColour(0xE8C27AFF),
+                   "Browse luminaires\u2026");
+        Panel.Text(Faces.Regular, 9.5f, BrowseMin.x + 12.0f, BrowseMin.y + 30.0f, 1.4f, ResolveCssColour(0x848484FF),
+                   "7 lights \u00B7 opens the shared Asset Browser");
+        RecordRect(State, "AddDrawer/Browse", BrowseMin, BrowseMax);
+        if (InvisibleRect("##AddBrowse", BrowseMin, BrowseMax))
         {
-            char Message[96]{};
-            std::snprintf(Message, sizeof(Message), "Add %s refused", Spec.Label);
-            NoopPhotometricWorkspaceCommand(State, "ADD", Message, "Adding lights is a NOOP in this shell");
+            if (Link != nullptr)
+            {
+                Link->OpenRequested = true;
+                Link->OpenWorkspace = AssetBrowserWorkspacePhotometric;
+            }
+            else Toast::Show("The Asset Browser is not attached in this shell.");
+            State.AddDrawerOpen = false;
         }
-        ImGui::PopID();
     }
     ImGui::SetCursorScreenPos(ImVec2(Panel.X, Panel.Y));
     ImGui::Dummy(ImVec2(1.0f, 1.0f));
@@ -831,7 +811,8 @@ void ConstructConsoleDrawer(PhotometricWorkspaceState& State, const EditorTypefa
 //                                                    IES MATRIX
 //------------------------------------------------------------------------------------------------------------------------
 
-void ConstructIesMatrix(PhotometricWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 RootMin, ImVec2 RootMax)
+void ConstructIesMatrix(PhotometricWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 RootMin, ImVec2 RootMax,
+                      AssetBrowserLink* Link)
 {
     if (!State.MatrixOpen) return;
     ImDrawList* const DrawList = ImGui::GetWindowDrawList();
@@ -856,7 +837,7 @@ void ConstructIesMatrix(PhotometricWorkspaceState& State, const EditorTypefaces&
     Dialog.Text(Faces.Light, 17.0f, Head.x, Head.y, 1.3f, ResolveCssColour(0xEFEFEFFF),
                 "IES Photometric Goniometer & LM-63 Catalogue");
     Dialog.Text(Faces.Regular, 10.5f, Head.x, Head.y + 28.0f, 1.4f, ResolveCssColour(0x848484FF),
-                "Compare all 7 measured LM-63 Type-C .ies distributions and Project Zero analytical beams.");
+                "Profile browsing moved to the shared Asset Browser.");
     const ImVec2 CloseMax(SheetMin.x + SheetWide - 24.0f, Head.y + 30.0f);
     const ImVec2 CloseMin(CloseMax.x - 30.0f, Head.y);
     DialogList->AddRectFilled(CloseMin, CloseMax, ResolveCssColour(0x1A1A1AFF), 15.0f);
@@ -865,70 +846,31 @@ void ConstructIesMatrix(PhotometricWorkspaceState& State, const EditorTypefaces&
     RecordRect(State, "Matrix/Close", CloseMin, CloseMax);
     if (InvisibleRect("##MatrixClose", CloseMin, CloseMax)) State.MatrixOpen = false;
 
-    constexpr int Cols = 5;
-    const float   CellWide = (Dialog.Width - (Cols - 1) * 8.0f) / Cols;
-    constexpr float CellTall = 150.0f;
-    for (int Tile = 0; Tile < 15; ++Tile)
+    // 📝 The 15-tile IES gallery moved out to the shared Asset Browser; the dialog keeps its chrome and hands off.
     {
-        const int    Col = Tile % Cols;
-        const int    Row = Tile / Cols;
-        const ImVec2 CellMin(Dialog.X + Col * (CellWide + 8.0f), Dialog.Y + Row * (CellTall + 8.0f));
-        const ImVec2 CellMax(CellMin.x + CellWide, CellMin.y + CellTall);
-        const bool   Measured = Tile < 7;
-        DialogList->AddRectFilled(CellMin, CellMax, ResolveCssColour(0x1E1E1EFF), 12.0f);
-        char Title[48]{};
-        if (Measured) std::snprintf(Title, sizeof(Title), "%s.ies", QueryPhotometricMeasuredIes(Tile));
-        else std::snprintf(Title, sizeof(Title), "%s", QueryPhotometricPresetIes(Tile - 7));
-        Dialog.Text(Faces.Medium, 10.5f, CellMin.x + 10.0f, CellMin.y + 8.0f, 1.38f, ResolveCssColour(0xEFEFEFFF),
-                    Title);
-        Dialog.Text(Faces.Regular, 9.0f, CellMin.x + 10.0f, CellMin.y + 26.0f, 1.4f, ResolveCssColour(0x5E5E5EFF),
-                    Measured ? "LM-63 Measured" : "Project Zero");
-        const ImVec2 Web(CellMin.x + CellWide * 0.5f, CellMin.y + 100.0f);
-        for (int R = 1; R <= 3; ++R) DialogList->AddCircle(Web, R * 11.0f, ResolveCssColour(0xFFFFFF1A), 24, 1.0f);
-        const float Wedge = Measured ? 0.5f : 0.9f;
-        DialogList->AddLine(Web, ImVec2(Web.x - 30.0f * std::sin(Wedge), Web.y + 30.0f * std::cos(Wedge)),
-                            ResolveCssColour(0xE8C27ACC), 1.5f);
-        DialogList->AddLine(Web, ImVec2(Web.x + 30.0f * std::sin(Wedge), Web.y + 30.0f * std::cos(Wedge)),
-                            ResolveCssColour(0xE8C27ACC), 1.5f);
-        char TileTag[40]{};
-        std::snprintf(TileTag, sizeof(TileTag), "Matrix/Tile%d", Tile);
-        ImGui::PushID(800 + Tile);
-        RecordRect(State, TileTag, CellMin, CellMax);
-        if (InvisibleRect("##MatrixTile", CellMin, CellMax))
+        const ImVec2 Browse = Dialog.Space(64.0f, 8.0f, 0.0f);
+        const ImVec2 BrowseMin(Browse.x, Browse.y);
+        const ImVec2 BrowseMax(Browse.x + Dialog.Width, Browse.y + 64.0f);
+        DialogList->AddRectFilled(BrowseMin, BrowseMax, ResolveCssColour(0x1E1E1EFF), 12.0f);
+        DialogList->AddRect(BrowseMin, BrowseMax, ResolveCssColour(0xE8C27A66), 12.0f, ImDrawFlags_None, 1.0f);
+        Dialog.Text(Faces.Medium, 12.5f, BrowseMin.x + 14.0f, BrowseMin.y + 9.0f, 1.35f, ResolveCssColour(0xE8C27AFF),
+                    "Browse IES profiles\u2026");
+        Dialog.Text(Faces.Regular, 10.0f, BrowseMin.x + 14.0f, BrowseMin.y + 32.0f, 1.4f, ResolveCssColour(0x848484FF),
+                    "7 measured \u00B7 8 analytical \u00B7 opens the shared Asset Browser");
+        Dialog.Text(Faces.Medium, 13.0f, BrowseMax.x - 30.0f, BrowseMin.y + 19.0f, 1.35f, ResolveCssColour(0xE8C27AFF),
+                    "\u2197");
+        RecordRect(State, "Matrix/Browse", BrowseMin, BrowseMax);
+        if (InvisibleRect("##MatrixBrowse", BrowseMin, BrowseMax))
         {
-            int Target = -1;
-            if (State.Selected >= 0 && State.Selected < 8 && State.Lights[State.Selected].Type == 2)
-                Target = State.Selected;
-            else
-                for (int L = 0; L < 8; ++L)
-                    if (State.Lights[L].Type == 2)
-                    {
-                        Target = L;
-                        break;
-                    }
-            if (Target >= 0)
+            if (Link != nullptr)
             {
-                if (Measured)
-                {
-                    State.Lights[Target].Props.UseMeasuredIes  = true;
-                    State.Lights[Target].Props.MeasuredProfile = Tile;
-                }
-                else
-                {
-                    State.Lights[Target].Props.UseMeasuredIes = false;
-                    State.Lights[Target].Props.PresetProfile  = Tile - 7;
-                }
-                SelectPhotometricWorkspaceNode(State, Target);
-                char Message[128]{};
-                std::snprintf(Message, sizeof(Message), "Assigned photometric curve \"%s\" to %s", Title,
-                              State.Lights[Target].Name.c_str());
-                AppendPhotometricWorkspaceLog(State, "IES", Message);
+                Link->OpenRequested = true;
+                Link->OpenWorkspace = AssetBrowserWorkspacePhotometric;
             }
+            else Toast::Show("The Asset Browser is not attached in this shell.");
             State.MatrixOpen = false;
         }
-        ImGui::PopID();
     }
-    Dialog.Y += 3 * (CellTall + 8.0f);
     ImGui::SetCursorScreenPos(ImVec2(Dialog.X, Dialog.Y));
     ImGui::Dummy(ImVec2(1.0f, 1.0f));
     ImGui::EndChild();
@@ -947,8 +889,105 @@ void ConstructIesMatrix(PhotometricWorkspaceState& State, const EditorTypefaces&
 //                                                    ROOT
 //------------------------------------------------------------------------------------------------------------------------
 
-void ConstructPhotometricWorkspace(PhotometricWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Size)
+void ApplyPhotometricWorkspaceLink(PhotometricWorkspaceState& State, AssetBrowserLink* Link)
 {
+    if (Link == nullptr || !Link->HasHandoff() || Link->OpenRecordWorkspace != AssetBrowserWorkspacePhotometric) return;
+    static constexpr const char* RigPrefix   = "photo-rig/";
+    static constexpr const char* LightPrefix = "photo-light/";
+    static constexpr const char* MoonPrefix  = "photo-moon/";
+    static constexpr const char* IesMPrefix  = "photo-ies-m/";
+    static constexpr const char* IesPPrefix  = "photo-ies-p/";
+    // 📝 Rig ids are pinned from the HTML prototype, like the browser catalogue.
+    static constexpr const char* RigIds[4] = { "roadway", "gallery", "studio", "lunar" };
+    const char*                  Raw       = Link->OpenRecordId;
+    if (std::strncmp(Raw, RigPrefix, std::strlen(RigPrefix)) == 0)
+    {
+        for (int I = 0; I < 4; ++I)
+            if (std::strcmp(Raw + std::strlen(RigPrefix), RigIds[I]) == 0) ApplyPhotometricScenario(State, I);
+    }
+    else if (std::strncmp(Raw, LightPrefix, std::strlen(LightPrefix)) == 0)
+    {
+        const int Type = QueryPhotometricLightSpecById(Raw + std::strlen(LightPrefix));
+        // 📝 The handoff refuses exactly like the old drawer key did.
+        char Message[192]{};
+        std::snprintf(Message, sizeof(Message), "Add %s refused",
+                      Type >= 0 ? QueryPhotometricLightSpec(Type).Label : Raw);
+        NoopPhotometricWorkspaceCommand(State, "ADD", Message, "Adding lights is a NOOP in this shell");
+    }
+    else if (std::strncmp(Raw, MoonPrefix, std::strlen(MoonPrefix)) == 0)
+    {
+        int Found = -1;
+        for (int I = 0; I < QueryPhotometricMoonCount(); ++I)
+            if (std::strcmp(QueryPhotometricMoon(I).Id, Raw + std::strlen(MoonPrefix)) == 0) Found = I;
+        if (Found < 0)
+        {
+            char Message[192]{};
+            std::snprintf(Message, sizeof(Message), "Asset \u201C%s\u201D is not a known moon.", Raw);
+            AppendPhotometricWorkspaceLog(State, "MOON", Message);
+        }
+        else
+        {
+            State.Moon.Slot = Found;
+            SelectPhotometricWorkspaceNode(State, PhotometricWorkspaceState::SelectedMoon);
+            char Message[160]{};
+            std::snprintf(Message, sizeof(Message), "Moon \u201C%s\u201D applied from the Asset Browser.",
+                          QueryPhotometricMoon(Found).Name);
+            AppendPhotometricWorkspaceLog(State, "MOON", Message);
+        }
+    }
+    else if (std::strncmp(Raw, IesMPrefix, std::strlen(IesMPrefix)) == 0 ||
+             std::strncmp(Raw, IesPPrefix, std::strlen(IesPPrefix)) == 0)
+    {
+        const bool Measured = std::strncmp(Raw, IesMPrefix, std::strlen(IesMPrefix)) == 0;
+        const char* Name = Raw + (Measured ? std::strlen(IesMPrefix) : std::strlen(IesPPrefix));
+        int Found = -1;
+        const int Count = Measured ? QueryPhotometricMeasuredIesCount() : QueryPhotometricPresetIesCount();
+        for (int I = 0; I < Count; ++I)
+        {
+            const char* Candidate = Measured ? QueryPhotometricMeasuredIes(I) : QueryPhotometricPresetIes(I);
+            if (std::strcmp(Candidate, Name) == 0) Found = I;
+        }
+        if (Found >= 0)
+        {
+            // 📝 The handoff re-curves exactly like the old matrix tile did.
+            int Target = -1;
+            if (State.Selected >= 0 && State.Selected < 8 && State.Lights[State.Selected].Type == 2)
+                Target = State.Selected;
+            else
+                for (int L = 0; L < 8; ++L)
+                    if (State.Lights[L].Type == 2)
+                    {
+                        Target = L;
+                        break;
+                    }
+            if (Target >= 0)
+            {
+                if (Measured)
+                {
+                    State.Lights[Target].Props.UseMeasuredIes  = true;
+                    State.Lights[Target].Props.MeasuredProfile = Found;
+                }
+                else
+                {
+                    State.Lights[Target].Props.UseMeasuredIes = false;
+                    State.Lights[Target].Props.PresetProfile  = Found;
+                }
+                SelectPhotometricWorkspaceNode(State, Target);
+                char Message[192]{};
+                std::snprintf(Message, sizeof(Message), "Assigned photometric curve \u201C%s\u201D from the Asset Browser to %s",
+                              Name, State.Lights[Target].Name.c_str());
+                AppendPhotometricWorkspaceLog(State, "IES", Message);
+            }
+            State.MatrixOpen = false;
+        }
+    }
+    Link->ClearHandoff();
+}
+
+void ConstructPhotometricWorkspace(PhotometricWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Size,
+                                   AssetBrowserLink* Link)
+{
+    ApplyPhotometricWorkspaceLink(State, Link);
     State.Rects.clear();
     ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
     ImGui::SetNextWindowSize(Size);
@@ -976,8 +1015,8 @@ void ConstructPhotometricWorkspace(PhotometricWorkspaceState& State, const Edito
     const ImVec2 CentreMin(RailMax.x + 10.0f, WorkspaceY);
     const ImVec2 CentreMax(InspectorMin.x - 10.0f, WorkspaceY + WorkspaceH);
 
-    ConstructOutlinerPanel(State, Faces, RailMin, RailMax);
-    ConstructAddDrawer(State, Faces, RailMin, RailWide);
+    ConstructOutlinerPanel(State, Faces, RailMin, RailMax, Link);
+    ConstructAddDrawer(State, Faces, RailMin, RailWide, Link);
 
     // 📝 Centre column: stage plus transport, with the console drawer above the transport when open.
     constexpr float StripTall = 64.0f;
@@ -1026,7 +1065,7 @@ void ConstructPhotometricWorkspace(PhotometricWorkspaceState& State, const Edito
     ImGui::EndChild();
     ImGui::PopStyleColor();
 
-    ConstructIesMatrix(State, Faces, ImVec2(0.0f, 0.0f), Size);
+    ConstructIesMatrix(State, Faces, ImVec2(0.0f, 0.0f), Size, Link);
     Toast::Construct();
     ImGui::End();
 }

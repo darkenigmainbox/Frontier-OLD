@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include "Frontier/Engine/Interface/Workspaces/AssetBrowserWorkspace.h"
+
 #include <imgui.h>
 
 #include <deque>
@@ -281,16 +283,6 @@ struct FractureWorkspaceState
         FilterBaked
     };
 
-    enum
-    {
-        PresetAll = 0,
-        PresetEngineering,
-        PresetBrittle,
-        PresetStoneTimber,
-        PresetVoronoi,
-        PresetDuctile
-    };
-
     int Selected     = SelectedConstruct0;
     int InspectorTab = TabOverview;
 
@@ -345,8 +337,6 @@ struct FractureWorkspaceState
 
     std::string OutlinerQuery;
     int         OutlinerFilter = FilterAll;
-    std::string PresetQuery;
-    int         PresetGroup = PresetAll;
 
     bool StrikeNoopRaised = false; // 🧩 Latched by validation: Strike/Bake stay explicit NOOPs.
     bool BakeNoopRaised   = false;
@@ -365,7 +355,9 @@ void        RecordFractureWorkspaceRect(FractureWorkspaceState& State, const cha
 [[nodiscard]] bool QueryFractureWorkspaceRect(const FractureWorkspaceState& State, const char* Name, ImVec2& Min, ImVec2& Max) noexcept;
 void        EncodeFractureToml(const FractureWorkspaceState& State, int Construct, char* Text, size_t TextSize) noexcept;
 
-void ConstructFractureWorkspace(FractureWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Size);
+void ApplyFractureWorkspaceLink(FractureWorkspaceState& State, AssetBrowserLink* Link); // 🧩 fracture[-mat|-solver]/<id>.
+void ConstructFractureWorkspace(FractureWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Size,
+                                AssetBrowserLink* Link = nullptr);
 
 class ControlColumn;
 void ConstructFractureWorkspaceInspector(FractureWorkspaceState& State, const EditorTypefaces& Faces, ControlColumn& Column);

@@ -136,7 +136,7 @@ bool PillButton(UvWorkspaceState& State, PanelCursor& Panel, const char* Tag, co
 //                                                    TOP BAR
 //------------------------------------------------------------------------------------------------------------------------
 
-void ConstructTopBar(UvWorkspaceState& State, PanelCursor& Root)
+void ConstructTopBar(UvWorkspaceState& State, PanelCursor& Root, AssetBrowserLink* Link)
 {
     const EditorTypefaces& Faces    = *Root.Faces;
     ImDrawList* const      DrawList = Root.DrawList;
@@ -237,6 +237,20 @@ void ConstructTopBar(UvWorkspaceState& State, PanelCursor& Root)
         if (PillButton(State, Root, Tag, Id, TabX, Bar.y + 10.0f, Label, State.Asset == I))
             SelectUvWorkspaceAsset(State, I);
         TabX += W + 6.0f;
+    }
+    // 📝 Asset browsing moved out to the shared Asset Browser; the tabs keep their local restage.
+    {
+        const float BrowseWide = Root.Measure(Faces.Medium, 10.5f, "Browse \u2197") + 22.0f;
+        if (TabX + BrowseWide <= NavCursor - 8.0f &&
+            PillButton(State, Root, "TopBar/Browse", "UvBrowse", TabX, Bar.y + 10.0f, "Browse \u2197", false))
+        {
+            if (Link != nullptr)
+            {
+                Link->OpenRequested = true;
+                Link->OpenWorkspace = AssetBrowserWorkspaceUv;
+            }
+            else Toast::Show("The Asset Browser is not attached in this shell.");
+        }
     }
 }
 
@@ -1195,8 +1209,29 @@ void ConstructHelpSheet(UvWorkspaceState& State, const EditorTypefaces& Faces, I
 //------------------------------------------------------------------------------------------------------------------------
 //                                                    ROOT
 //------------------------------------------------------------------------------------------------------------------------
-void ConstructUvWorkspace(UvWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Size)
+void ApplyUvWorkspaceLink(UvWorkspaceState& State, AssetBrowserLink* Link)
 {
+    if (Link == nullptr || !Link->HasHandoff() || Link->OpenRecordWorkspace != AssetBrowserWorkspaceUv) return;
+    static constexpr const char* Prefix = "uv/";
+    const char*                  Raw    = Link->OpenRecordId;
+    int                          Found  = -1;
+    if (std::strncmp(Raw, Prefix, std::strlen(Prefix)) == 0)
+        for (int I = 0; I < QueryUvAssetCount(); ++I)
+            if (std::strcmp(QueryUvAsset(I).Id, Raw + std::strlen(Prefix)) == 0) Found = I;
+    if (Found >= 0) SelectUvWorkspaceAsset(State, Found);
+    else
+    {
+        char Message[192]{};
+        std::snprintf(Message, sizeof(Message), "Asset \u201C%s\u201D is not a UV asset", Raw);
+        AppendUvWorkspaceLog(State, "DOC", Message);
+    }
+    Link->ClearHandoff();
+}
+
+void ConstructUvWorkspace(UvWorkspaceState& State, const EditorTypefaces& Faces, ImVec2 Size,
+                          AssetBrowserLink* Link)
+{
+    ApplyUvWorkspaceLink(State, Link);
     State.Rects.clear();
     ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
     ImGui::SetNextWindowSize(Size);
@@ -1210,7 +1245,7 @@ void ConstructUvWorkspace(UvWorkspaceState& State, const EditorTypefaces& Faces,
     ImGui::PopStyleColor();
     ImDrawList* const DrawList = ImGui::GetWindowDrawList();
     PanelCursor Root{ DrawList, &Faces, 1.0f, 12.0f, Size.x - 24.0f, 10.0f };
-    ConstructTopBar(State, Root);
+    ConstructTopBar(State, Root, Link);
     const float WorkspaceY = Root.Y;
     constexpr float StatusTall = 36.0f;
     const float WorkspaceH = Size.y - 10.0f - StatusTall - 8.0f - WorkspaceY;

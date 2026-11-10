@@ -51,11 +51,12 @@ int main(int ArgumentCount, char** Arguments)
         const EditorTypefaces Faces = EditorTypefaces::Resolve();
         FluidWorkspaceState State{};
         ConstructFluidWorkspaceState(State);
+        AssetBrowserLink Link{};
 
         const auto Frame = [&]()
         {
             ImGui::NewFrame();
-            ConstructFluidWorkspace(State, Faces, IO.DisplaySize);
+            ConstructFluidWorkspace(State, Faces, IO.DisplaySize, &Link);
             ImGui::Render();
         };
         const auto RectCentre = [&](const char* Name)
@@ -140,10 +141,7 @@ int main(int ArgumentCount, char** Arguments)
         RectCentre("Viewport/Overlays");
         RectCentre("Viewport/Focus");
         RectCentre("Viewport/Maximize");
-        RectCentre("Library/Card0");
-        RectCentre("Library/Card17");
-        RectCentre("Library/Filter0");
-        RectCentre("Library/Filter3");
+        RectCentre("Library/Browse");
         RectCentre("TopBar/Doc");
         RectCentre("TopBar/Add");
         RectCentre("TopBar/Samples");
@@ -258,30 +256,19 @@ int main(int ArgumentCount, char** Arguments)
         Click("Viewport/Maximize");
         Confirm(Toast::QueryVisible(), "Maximize raised no toast");
 
-        // 7. The library lists 18 read-only presets; filters and search narrow the list locally.
-        Click("Library/Card0");
-        Confirm(Toast::QueryVisible(), "Picking a library card raised no toast");
-        Confirm(!State.Log.empty() && State.Log.front().Channel == "LIBRARY", "Picking a library card logged no LIBRARY line");
-        Click("Library/Filter2");
-        {
-            ImVec2 Min{}, Max{};
-            Confirm(!QueryFluidWorkspaceRect(State, "Library/Card0", Min, Max), "The smoke filter kept a fire card");
-        }
-        RectCentre("Library/Card5");
-        Click("Library/Filter0");
-        RectCentre("Library/Card0");
-        State.LibraryQuery = "tornado";
+        // 7. The library delegates to the shared Asset Browser; the handoff refuses like the old card did.
+        Click("Library/Browse");
+        Confirm(Link.OpenRequested, "The browse row did not request the browser");
+        Confirm(Link.OpenWorkspace == AssetBrowserWorkspaceFluid, "The browse row requested the wrong workspace");
+        Link.OpenRequested = false;
+        Link.OpenWorkspace = -1;
+        std::snprintf(Link.OpenRecordId, sizeof(Link.OpenRecordId), "fluid/ue5_pyro_default");
+        Link.OpenRecordWorkspace = AssetBrowserWorkspaceFluid;
         Frame();
         Frame();
-        {
-            ImVec2 Min{}, Max{};
-            Confirm(!QueryFluidWorkspaceRect(State, "Library/Card0", Min, Max), "The search kept a non-matching card");
-        }
-        RectCentre("Library/Card6");
-        State.LibraryQuery.clear();
-        Frame();
-        Frame();
-        RectCentre("Library/Card0");
+        Confirm(!Link.HasHandoff(), "The shell did not consume the handoff");
+        Confirm(Toast::QueryVisible(), "The handoff raised no toast");
+        Confirm(!State.Log.empty() && State.Log.front().Channel == "LIBRARY", "The handoff logged no LIBRARY line");
 
         // 8. The bake dialog stages settings locally; baking refuses, cancel/close dismiss silently.
         Click("Viewport/Flipbook");

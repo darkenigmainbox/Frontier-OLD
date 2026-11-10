@@ -54,11 +54,12 @@ int main(int ArgumentCount, char** Arguments)
         const EditorTypefaces Faces = EditorTypefaces::Resolve();
         UvWorkspaceState State{};
         ConstructUvWorkspaceState(State);
+        AssetBrowserLink Link{};
 
         const auto Frame = [&]()
         {
             ImGui::NewFrame();
-            ConstructUvWorkspace(State, Faces, IO.DisplaySize);
+            ConstructUvWorkspace(State, Faces, IO.DisplaySize, &Link);
             ImGui::Render();
         };
         const auto RectCentre = [&](const char* Name)
@@ -176,6 +177,25 @@ int main(int ArgumentCount, char** Arguments)
         Click("TopBar/Asset0");
         Confirm(State.Asset == 0, "The coupe tab did not restore");
         Confirm(State.Log.front().Channel == "DOC", "The restage missed its DOC channel");
+
+        // 4b. The browse pill requests the browser; asset handoffs restage like the tabs.
+        Click("TopBar/Browse");
+        Confirm(Link.OpenRequested, "The browse pill did not request the browser");
+        Confirm(Link.OpenWorkspace == AssetBrowserWorkspaceUv, "The browse pill requested the wrong workspace");
+        Link.OpenRequested = false;
+        Link.OpenWorkspace = -1;
+        std::snprintf(Link.OpenRecordId, sizeof(Link.OpenRecordId), "uv/bust");
+        Link.OpenRecordWorkspace = AssetBrowserWorkspaceUv;
+        Frame();
+        Frame();
+        Confirm(!Link.HasHandoff(), "The shell did not consume the handoff");
+        Confirm(State.Asset == 2, "The bust handoff did not restage");
+        Confirm(State.Selected == -1, "The handoff restage kept a stray selection");
+        std::snprintf(Link.OpenRecordId, sizeof(Link.OpenRecordId), "uv/coupe");
+        Link.OpenRecordWorkspace = AssetBrowserWorkspaceUv;
+        Frame();
+        Frame();
+        Confirm(State.Asset == 0, "The coupe handoff did not restore");
 
         // 5. Stage HUD: modes, tools, lens, shade, pivots, snaps, and toggles flip shell-local state silently.
         const int HudNoops = State.NoopCount;
