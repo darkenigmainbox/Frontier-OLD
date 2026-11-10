@@ -215,14 +215,12 @@ int main(int ArgumentCount, char** Arguments)
         Confirm(State.Log.front().Channel == "WORKSPACE", "The boot line missed its WORKSPACE channel");
         {
             const FractureReceipt& Rec = State.Constructs[0].Receipt;
-            Confirm(Rec.FragmentCount >= 1 && Rec.FragmentCount <= 32, "The monolith receipt missed its ceiling");
+            Confirm(Rec.FragmentCount == 32, "Native Engineering FEM diverged from the reference monolith fragment count");
             Confirm(Rec.VolumeDriftRatio <= 1.0e-3, "The monolith drift exceeded its bound");
             Confirm(Rec.WatertightManifold, "The monolith missed its watertight manifold");
             Confirm(Rec.BudgetPercent >= 0.0 && Rec.BudgetPercent <= 100.0, "The monolith budget left 0–100");
-            // The old shell band was reference-receipt specific; the native engineering solver is still an approximation
-            // of the reference 12^3 stress lattice, so validate finite, positive, bounded native geometry here instead.
-            Confirm(std::isfinite(Rec.TotalCrackArea) && Rec.TotalCrackArea > 0.0 && Rec.TotalCrackArea <= 50.0,
-                    "The native monolith crack area is missing or physically implausible");
+            Confirm(std::isfinite(Rec.TotalCrackArea) && std::abs(Rec.TotalCrackArea - 9.64874271838099) < 1.0e-6,
+                    "Native Engineering FEM diverged from the reference monolith crack area");
             Confirm(Rec.IntactBondCount <= Rec.BondCount, "Intact bonds exceeded total bonds");
             Confirm(State.SunSolved.ElevationDeg > 20.0 && State.SunSolved.ElevationDeg < 45.0,
                     "The solar elevation left its afternoon band");

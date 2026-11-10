@@ -1390,9 +1390,13 @@ Result Execute(const Polyhedron& BaseSolid, const Request& RawInput, const Mater
                                      SpentEnergy, Out.TotalEnergyBudgetJ);
         break;
     case Solver::EngineeringFem:
-        RawPieces = SolveSequentialCuts(Base, Out.BaseMetrics, Input, Mat, Solver::EngineeringFem, Ceiling,
-                                        Out.TotalEnergyBudgetJ, Random, NextToken, SpentEnergy);
+    {
+        uint64_t RandomDraws = 0;
+        RawPieces = SolveEngineeringPartition(Base, Out.BaseMetrics, Input, Mat, Ceiling,
+                                              Out.TotalEnergyBudgetJ, SpentEnergy, RandomDraws);
+        for (uint64_t Draw = 0; Draw < RandomDraws; ++Draw) (void)Random.Next();
         break;
+    }
     case Solver::Griffith:
         RawPieces = SolveGriffith(Base, Out.BaseMetrics, Input, Mat, Ceiling, Random, NextToken,
                                   SpentEnergy, Out.TotalEnergyBudgetJ);
